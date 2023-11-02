@@ -34,7 +34,7 @@ import {
 } from 'mui-tiptap';
 import JsonEditor from './JsonEditor';
 import { JsonObject } from '../utils/JsonObject';
-import ComponentInstance from '../models/ComponentInstance';
+import { ComponentInstance } from '../models/ComponentInstance';
 
 export interface ComponentAndStateKeys {
   component: ComponentInstance;
@@ -61,7 +61,7 @@ function ComponentAttributes({
 
   const handleChangeFunctionName = (e: React.ChangeEvent<HTMLInputElement>) => {
     setComponentAndStateKeys({
-      component: { ...component, functionName: e.target.value },
+      component: { ...component, function_name: e.target.value },
       stateKeys,
     });
   };
@@ -94,7 +94,7 @@ function ComponentAttributes({
             sx={{ my: 1, flex: 1 }}
           />
           <TextField
-            value={component.functionName}
+            value={component.function_name}
             onChange={handleChangeFunctionName}
             label="Function Name"
             size="small"
@@ -105,7 +105,7 @@ function ComponentAttributes({
         </Box>
         <Typography variant="body2">Component ID: {component.id}</Typography>
         <Typography variant="body2">
-          Created at: {component.createdAt.toLocaleString()}
+          Created at: {component.created_at.toLocaleString()}
         </Typography>
       </Box>
       <Divider />

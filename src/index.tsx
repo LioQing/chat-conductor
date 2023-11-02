@@ -7,7 +7,7 @@ import {
   RouterProvider,
 } from 'react-router-dom';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
-import { SettingsContext } from './contexts/Settings';
+import { Settings as SettingsData, SettingsContext } from './contexts/Settings';
 import Pipeline from './pages/Pipeline';
 import Account from './pages/Account';
 import Settings from './pages/Settings';
@@ -15,6 +15,8 @@ import Login from './pages/Login';
 import reportWebVitals from './reportWebVitals';
 import './index.css';
 import Scaffold from './components/Scaffold';
+import Index from './pages/Index';
+import useLocalStorage from './hooks/useLocalStorage';
 
 const baseTheme = {
   shape: {
@@ -69,6 +71,7 @@ const router = createBrowserRouter(
   createRoutesFromElements(
     <>
       <Route path="/" element={<Scaffold />}>
+        <Route index element={<Index />} />
         <Route path="pipeline/" element={<Pipeline />} />
         <Route path="account/" element={<Account />} />
         <Route path="settings/" element={<Settings />} />
@@ -79,7 +82,7 @@ const router = createBrowserRouter(
 );
 
 function App() {
-  const [settings, setSettings] = React.useState({
+  const [settings, setSettings] = useLocalStorage<SettingsData>('settings', {
     darkMode: false,
   });
 

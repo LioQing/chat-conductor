@@ -11,8 +11,6 @@ function Settings() {
   const { settings, setSettings } = React.useContext(SettingsContext);
 
   const handleDarkMode = () => {
-    // TODO: Change local storage
-    console.log('TODO: Change local storage');
     setSettings({ ...settings, darkMode: !settings.darkMode });
   };
 

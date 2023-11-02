@@ -6,7 +6,7 @@ import Panel from './Panel';
 import ComponentAttributes, {
   ComponentAndStateKeys,
 } from './ComponentAttributes';
-import ComponentInstance from '../models/ComponentInstance';
+import { ComponentInstance } from '../models/ComponentInstance';
 import { JsonObject } from '../utils/JsonObject';
 
 const componentToComponentAndStateKeys = (
@@ -98,7 +98,7 @@ const PipelineEditor = React.forwardRef(
         ({
           getName: () => componentAndStateKeys?.component.name ?? '',
           getFunctionName: () =>
-            componentAndStateKeys?.component.functionName ?? '',
+            componentAndStateKeys?.component.function_name ?? '',
           getDescription: () =>
             componentAndStateKeys?.component.description ?? '',
           getCode: () => code,

@@ -16,42 +16,49 @@ import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
-import Pipeline from '../models/Pipeline';
+import {
+  Pipeline,
+  deletePipelineDelete,
+  getPipeline,
+} from '../models/Pipeline';
+import useComposerAxios from '../hooks/useComposerAxios';
+import {
+  PipelineRename,
+  PipelineRenameRequest,
+  putPipelineRename,
+} from '../models/PipelineRename';
 
 export interface PipelineListProps {
   setPipeline: (pipeline: Pipeline | null) => void;
 }
 
 function PipelineList({ setPipeline }: PipelineListProps) {
+  const pipelinesClient = useComposerAxios<Pipeline[]>(getPipeline());
+  const pipelineDeleteClient = useComposerAxios<Pipeline[]>();
+  const pipelineRenameClient = useComposerAxios<
+    PipelineRename,
+    PipelineRenameRequest
+  >();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [menuDialog, setMenuDialog] = React.useState<
     'Rename' | 'Delete' | null
   >(null);
   const [menuPipeline, setMenuPipeline] = React.useState<null | Pipeline>(null);
-  // TODO: get pipelines from backend
-  console.log('TODO: get pipelines from backend');
-  const [pipelines, setPipelines] = React.useState([
-    { id: 1, name: '_Pipeline 01', user: 'user1' } as Pipeline,
-    { id: 2, name: '_Pipeline 02', user: 'user1' } as Pipeline,
-    { id: 3, name: '_Pipeline 03', user: 'user1' } as Pipeline,
-    { id: 4, name: '_Pipeline 04', user: 'user1' } as Pipeline,
-    { id: 5, name: '_Pipeline 05', user: 'user1' } as Pipeline,
-    { id: 6, name: '_Pipeline 06', user: 'user1' } as Pipeline,
-    { id: 7, name: '_Pipeline 07', user: 'user1' } as Pipeline,
-    { id: 8, name: '_Pipeline 08', user: 'user1' } as Pipeline,
-    { id: 9, name: '_Pipeline 09', user: 'user1' } as Pipeline,
-    { id: 10, name: 'Pipeline 10', user: 'user1' } as Pipeline,
-    { id: 11, name: 'Pipeline 11', user: 'user1' } as Pipeline,
-    { id: 12, name: 'Pipeline 12', user: 'user1' } as Pipeline,
-    { id: 13, name: 'Pipeline 13', user: 'user1' } as Pipeline,
-    { id: 14, name: 'Pipeline 14', user: 'user1' } as Pipeline,
-    { id: 15, name: 'Pipeline 15', user: 'user1' } as Pipeline,
-    { id: 16, name: 'Pipeline 16', user: 'user1' } as Pipeline,
-    { id: 17, name: 'Pipeline 17', user: 'user1' } as Pipeline,
-    { id: 18, name: 'Pipeline 18', user: 'user1' } as Pipeline,
-    { id: 19, name: 'Pipeline 19', user: 'user1' } as Pipeline,
-    { id: 20, name: 'Pipeline 20', user: 'user1' } as Pipeline,
-  ]);
+  const [pipelines, setPipelines] = React.useState<Pipeline[]>([]);
+
+  const fetchPipelines = () => {
+    pipelinesClient.sendRequest();
+  };
+
+  React.useEffect(() => {
+    fetchPipelines();
+  }, []);
+
+  React.useEffect(() => {
+    if (!pipelinesClient.response) return;
+
+    setPipelines(pipelinesClient.response.data);
+  }, [pipelinesClient.response]);
 
   const handleSelectPipeline = (pipeline: Pipeline) => {
     setPipeline(pipeline);
@@ -79,15 +86,23 @@ function PipelineList({ setPipeline }: PipelineListProps) {
   const handleRenameSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    // TODO: Rename in backend
-    console.log('TODO: Rename in backend');
+    if (!menuPipeline) return;
+
     const data = new FormData(event.currentTarget);
-    console.log({
-      name: data.get('new-name'),
-    });
+    const newName = data.get('new-name');
+    if (!newName) return;
+
+    pipelineRenameClient.sendRequest(
+      putPipelineRename(menuPipeline.id, { name: newName as string }),
+    );
+  };
+
+  React.useEffect(() => {
+    if (!pipelineRenameClient.response) return;
 
     handleDialogClose();
-  };
+    fetchPipelines();
+  }, [pipelineRenameClient.response]);
 
   const handleDelete = () => {
     handleMenuClose();
@@ -95,11 +110,16 @@ function PipelineList({ setPipeline }: PipelineListProps) {
   };
 
   const handleDeleteConfirm = () => {
-    // TODO: Delete in backend
-    console.log('TODO: Delete in backend', menuPipeline);
-    setPipelines(pipelines.filter((p) => p.id !== menuPipeline?.id));
-    handleDialogClose();
+    if (!menuPipeline) return;
+    pipelineDeleteClient.sendRequest(deletePipelineDelete(menuPipeline.id));
   };
+
+  React.useEffect(() => {
+    if (pipelineDeleteClient.response === null) return;
+
+    handleDialogClose();
+    fetchPipelines();
+  }, [pipelineDeleteClient.response]);
 
   return (
     <List>
@@ -155,7 +175,7 @@ function PipelineList({ setPipeline }: PipelineListProps) {
             </b>
             .
           </DialogContentText>
-          <Box component="form" onSubmit={handleRenameSubmit}>
+          <Box id="rename-form" component="form" onSubmit={handleRenameSubmit}>
             <TextField
               margin="normal"
               required
@@ -163,13 +183,22 @@ function PipelineList({ setPipeline }: PipelineListProps) {
               id="new-name"
               label="New Name"
               name="new-name"
+              autoComplete="new-password" // https://learn.microsoft.com/en-us/answers/questions/974921/edge-bug-autocomplete-off-still-displays-previousl
               autoFocus
             />
             <Box display="flex" justifyContent="flex-end" gap={1} mt={1}>
-              <Button variant="outlined" onClick={handleDialogClose}>
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={handleDialogClose}
+              >
                 Cancel
               </Button>
-              <Button type="submit" variant="contained">
+              <Button
+                sx={{ form: 'rename-form' }}
+                type="submit"
+                variant="contained"
+              >
                 Confirm
               </Button>
             </Box>

@@ -11,45 +11,112 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
 import Button from '@mui/material/Button';
 import useTheme from '@mui/material/styles/useTheme';
+import LinearProgress from '@mui/material/LinearProgress';
+import { useCookies } from 'react-cookie';
 import Panel from '../components/Panel';
 import Collapsible from '../components/Collapsible';
+import useAxios from '../hooks/useAxios';
+import {
+  UsernameExistsRequest,
+  UsernameExists,
+  postUsernameExists,
+} from '../models/AuthUsernameExists';
+import {
+  LoginRequest,
+  Login as LoginModel,
+  postLogin,
+} from '../models/AuthLogin';
+import { handleException } from '../models/Exception';
 
 function Login() {
   const theme = useTheme();
+  const [, setCookies] = useCookies();
   const navigate = useNavigate();
 
-  // 0 - username, 1 - password/face
+  // 0 - username, 1 - password
   const [loginStage, setLoginStage] = React.useState(0);
+  const usernameClient = useAxios<UsernameExists, UsernameExistsRequest>();
+  const [usernameError, setUsernameError] = React.useState<string | null>(null);
+  const passwordClient = useAxios<LoginModel, LoginRequest>();
+  const [passwordError, setPasswordError] = React.useState<string | null>(null);
 
   const handleBack = () => {
     setLoginStage(0);
+    setPasswordError(null);
   };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    event.currentTarget.username.disabled = false;
-    const data = new FormData(event.currentTarget);
-    event.currentTarget.username.disabled = true;
-
-    console.log({
-      username: data.get('username'),
-      password: data.get('password'),
-      remember: data.get('remember'),
-    });
-
     if (loginStage === 0) {
-      // TODO: Check username with backend
-      console.log('TODO: Check username with backend');
-      setLoginStage(1);
+      const data = new FormData(event.currentTarget);
+
+      // validation
+      if (!data.get('username')) {
+        setUsernameError('This field may not be blank');
+        return;
+      }
+
+      // request
+      usernameClient.sendRequest(
+        postUsernameExists({ username: data.get('username') as string }),
+      );
     } else if (loginStage === 1) {
-      // TODO: Check password with backend
-      console.log('TODO: Check password with backend');
-      navigate('/pipeline/');
+      event.currentTarget.username.disabled = false;
+      const data = new FormData(event.currentTarget);
+      event.currentTarget.username.disabled = true;
+
+      // validation
+      if (!data.get('password')) {
+        setPasswordError('This field may not be blank');
+        return;
+      }
+      setPasswordError(null);
+
+      // request
+      passwordClient.sendRequest(
+        postLogin({
+          username: data.get('username') as string,
+          password: data.get('password') as string,
+        }),
+      );
     } else {
       console.error('Invalid login stage');
     }
   };
+
+  React.useEffect(() => {
+    if (usernameClient.error) {
+      setUsernameError(handleException(usernameClient));
+    } else if (usernameClient.response?.data) {
+      if (usernameClient.response.data.exists) {
+        setUsernameError(null);
+        setLoginStage(1);
+      } else {
+        setUsernameError('Username does not exist');
+      }
+    }
+  }, [usernameClient.response, usernameClient.error]);
+
+  React.useEffect(() => {
+    if (passwordClient.error) {
+      if (passwordClient.error.response?.status === 401) {
+        setPasswordError('Incorrect password');
+      } else {
+        setPasswordError(handleException(passwordClient));
+      }
+    } else if (passwordClient.response?.data) {
+      setCookies('access-token', passwordClient.response.data.access, {
+        path: '/',
+        expires: new Date(passwordClient.response.data.access_expiration),
+      });
+      setCookies('refresh-token', passwordClient.response.data.refresh, {
+        path: '/',
+        expires: new Date(passwordClient.response.data.refresh_expiration),
+      });
+      navigate('/pipeline/');
+    }
+  }, [passwordClient.response, passwordClient.error]);
 
   return (
     <Container>
@@ -87,10 +154,18 @@ function Login() {
               <Typography component="h1" variant="h5" gutterBottom>
                 Login
               </Typography>
+              <LinearProgress
+                style={{
+                  width: '100%',
+                  visibility:
+                    usernameClient.loading || passwordClient.loading
+                      ? 'visible'
+                      : 'hidden',
+                }}
+              />
               <Box component="form" onSubmit={handleSubmit} width="100%">
                 <TextField
                   margin="normal"
-                  required
                   fullWidth
                   id="username"
                   label="Username"
@@ -98,17 +173,21 @@ function Login() {
                   autoComplete="username"
                   disabled={loginStage > 0}
                   autoFocus
+                  error={!!usernameError}
+                  helperText={usernameError}
                 />
                 <Collapsible collapsed={loginStage === 0}>
                   <TextField
                     margin="normal"
-                    required
                     fullWidth
                     name="password"
                     label="Password"
                     type="password"
                     id="password"
                     autoComplete="current-password"
+                    autoFocus
+                    error={!!passwordError}
+                    helperText={passwordError}
                   />
                 </Collapsible>
                 <Box display="flex" flexDirection="row" mt={3} gap={2}>

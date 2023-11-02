@@ -3,22 +3,22 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import StarterKit from '@tiptap/starter-kit';
 import { RichTextEditor } from 'mui-tiptap';
-import Component from '../models/Component';
+import { Component } from '../models/Component';
 
-export interface ComponentDescriptionProps {
+export interface ComponentDetailsProps {
   component: Component;
 }
 
-function ComponentDescription({ component }: ComponentDescriptionProps) {
+function ComponentDetails({ component }: ComponentDetailsProps) {
   return (
     <Box>
       <Typography variant="h6">{component.name}</Typography>
       <Typography variant="body1">ID: {component.id}</Typography>
       <Typography variant="body1">
-        Function Name: <code>{component.functionName}</code>
+        Function Name: <code>{component.function_name}</code>
       </Typography>
       <Typography variant="body1">
-        Created At: {component.createdAt.toLocaleString()}
+        Created At: {new Date(component.created_at).toLocaleString()}
       </Typography>
       <Box py={1}>
         <RichTextEditor
@@ -31,4 +31,4 @@ function ComponentDescription({ component }: ComponentDescriptionProps) {
   );
 }
 
-export default ComponentDescription;
+export default ComponentDetails;

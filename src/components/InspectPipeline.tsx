@@ -12,11 +12,17 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import ComponentList from './ComponentList';
-import Pipeline from '../models/Pipeline';
-import ComponentInstance from '../models/ComponentInstance';
-import Component from '../models/Component';
+import { Pipeline } from '../models/Pipeline';
+import { ComponentInstance } from '../models/ComponentInstance';
+import { Component, getComponent } from '../models/Component';
 import ComponentBrowser from './ComponentBrowser';
-import ComponentDescription from './ComponentDescription';
+import ComponentDetails from './ComponentDetails';
+import useComposerAxios from '../hooks/useComposerAxios';
+import {
+  ComponentInstanceNew,
+  ComponentInstanceNewRequest,
+  postComponentInstanceNew,
+} from '../models/ComponentInstanceNew';
 
 export interface InspectPipelineRef {
   getPipelineName: () => string;
@@ -51,6 +57,12 @@ const InspectPipeline = React.forwardRef(
       null,
     );
 
+    const addComponentSelectClient = useComposerAxios<Component>();
+    const addComponentClient = useComposerAxios<
+      ComponentInstanceNew,
+      ComponentInstanceNewRequest
+    >();
+
     const handleChangeName = (e: React.ChangeEvent<HTMLInputElement>) => {
       setPipelineName(e.target.value);
       onUnsave();
@@ -73,49 +85,32 @@ const InspectPipeline = React.forwardRef(
       setAddComponentDialog(false);
       setAddComponent(null);
 
-      // TODO: add component
-      console.log('TODO: add component');
+      if (!addComponent) return;
 
-      // duplicate component to become a component instance for now
-      const newComp = {
-        ...addComponent,
-        id: components.length,
-        order: components.length,
-        isEnabled: true,
-        createdAt: new Date(),
-      } as ComponentInstance;
-
-      setComponents([...components, newComp]);
+      addComponentClient.sendRequest(
+        postComponentInstanceNew(pipeline.id, {
+          template_component_id: addComponent.id,
+        }),
+      );
     };
+
+    React.useEffect(() => {
+      if (!addComponentClient.response) return;
+
+      setComponent(addComponentClient.response.data);
+      setMode('attr');
+      setComponents([...components, addComponentClient.response.data]);
+    }, [addComponentClient.response]);
 
     const handleAddComponentSelect = (id: number) => {
-      // TODO: get component from backend with id
-      console.log('TODO: get component from backend');
-      const i = components.length;
-      setAddComponent({
-        id,
-        name: `Component ${i}`,
-        functionName: `comp_${i}`,
-        description: {
-          type: 'doc',
-          content: [
-            {
-              type: 'paragraph',
-              content: [
-                {
-                  type: 'text',
-                  text: `This is component ${i}`,
-                },
-              ],
-            },
-          ],
-        },
-        code: `def comp_${i}(user_message, data):\n  return data\n`,
-        state: { [`State ${i}`]: Math.random(), Greet: 'Hi' },
-        isTemplate: Math.random() < 0.5,
-        createdAt: new Date(),
-      } as Component);
+      addComponentSelectClient.sendRequest(getComponent(id));
     };
+
+    React.useEffect(() => {
+      if (!addComponentSelectClient.response) return;
+
+      setAddComponent(addComponentSelectClient.response.data);
+    }, [addComponentSelectClient.response]);
 
     React.useImperativeHandle(
       ref,
@@ -138,7 +133,9 @@ const InspectPipeline = React.forwardRef(
             sx={{ my: 1 }}
           />
           <Typography variant="body2">Pipeline ID: {pipeline.id}</Typography>
-          <Typography variant="body2">Owner: {pipeline.user}</Typography>
+          <Typography variant="body2">
+            Created At: {new Date(pipeline.created_at).toLocaleString()}
+          </Typography>
         </Box>
         <Divider sx={{ mx: 3 }} />
         {React.useMemo(
@@ -183,7 +180,7 @@ const InspectPipeline = React.forwardRef(
               <DialogTitle>Add Component</DialogTitle>
               <DialogContent>
                 {addComponent ? (
-                  <ComponentDescription component={addComponent} />
+                  <ComponentDetails component={addComponent} />
                 ) : (
                   <ComponentBrowser onSelectId={handleAddComponentSelect} />
                 )}

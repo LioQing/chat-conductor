@@ -6,6 +6,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import useTheme from '@mui/material/styles/useTheme';
 import Tooltip from '@mui/material/Tooltip';
 import TouchRipple from '@mui/material/ButtonBase/TouchRipple';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import Panel from '../components/Panel';
 import PipelineList from '../components/PipelineList';
 import InspectPipeline, {
@@ -16,11 +17,15 @@ import PipelineEditor, {
 } from '../components/PipelineEditor';
 import useContainerDimensions from '../hooks/useContainerDimensions';
 import useKey from '../hooks/useKey';
-import PipelineModel from '../models/Pipeline';
+import { Pipeline as PipelineModel, postPipelineNew } from '../models/Pipeline';
 import Chat from '../components/Chat';
-import ComponentInstance from '../models/ComponentInstance';
+import {
+  ComponentInstance,
+  getComponentInstance,
+} from '../models/ComponentInstance';
 import Prompt from '../components/Prompt';
 import { JsonObject } from '../utils/JsonObject';
+import useComposerAxios from '../hooks/useComposerAxios';
 
 const unsaveMessage =
   'You have unsaved changes. Are you sure you want to leave?';
@@ -30,9 +35,7 @@ function Pipeline() {
   const { height: containerHeight } = useContainerDimensions();
   const [pipelineOpened, setPipelineOpened] = React.useState(false);
   const [pipeline, setPipeline] = React.useState<PipelineModel | null>(null);
-  const [componentOrder, setComponentOrder] = React.useState<number | null>(
-    null,
-  );
+  const [componentId, setComponentId] = React.useState<number | null>(null);
   const [components, setComponents] = React.useState<ComponentInstance[]>([]);
   const [mode, setMode] = React.useState<'code' | 'attr' | null>(null);
   const [editorHeight, setEditorHeight] = React.useState(0);
@@ -44,55 +47,31 @@ function Pipeline() {
   const inspectPipelineRef = React.useRef<InspectPipelineRef>(null);
   const pipelineEditorRef = React.useRef<PipelineEditorRef>(null);
 
+  const pipelineNewClient = useComposerAxios<PipelineModel>(postPipelineNew());
+  const pipelineComponentInstanceClient =
+    useComposerAxios<ComponentInstance[]>();
+
   React.useEffect(() => {
     if (pipeline) {
       setPipelineOpened(true);
+      pipelineComponentInstanceClient.sendRequest(
+        getComponentInstance(pipeline.id),
+      );
     } else {
       setPipelineOpened(false);
       setMode(null);
-      setComponentOrder(null);
-
-      // TODO: Get components from backend
-      console.log('TODO: Get components from backend');
-      setComponents(
-        (() => {
-          let i: number;
-          const comps: ComponentInstance[] = [];
-          for (i = 0; i < 20; i += 1) {
-            comps.push({
-              id: i,
-              name: `Component ${i}`,
-              functionName: `comp_${i}`,
-              description: {
-                type: 'doc',
-                content: [
-                  {
-                    type: 'paragraph',
-                    content: [
-                      {
-                        type: 'text',
-                        text: `This is component ${i}`,
-                      },
-                    ],
-                  },
-                ],
-              },
-              code: `def comp_${i}(user_message, data):\n  return data\n`,
-              order: i,
-              state: { [`State ${i}`]: Math.random(), Greet: 'Hi' },
-              isEnabled: Math.random() < 0.5,
-              isTemplate: Math.random() < 0.5,
-              createdAt: new Date(),
-            });
-          }
-
-          return comps;
-        })(),
-      );
-
+      setComponentId(null);
+      setComponents([]);
       setSaved(true);
     }
   }, [pipeline]);
+
+  React.useEffect(() => {
+    if (!pipelineComponentInstanceClient.response) return;
+
+    const componentInstance = pipelineComponentInstanceClient.response.data;
+    setComponents(componentInstance);
+  }, [pipelineComponentInstanceClient.response]);
 
   const handlePipelineBack = () => {
     if (pipelineOpened && !saved) {
@@ -104,6 +83,16 @@ function Pipeline() {
     setPipelineOpened(false);
     setPipeline(null);
   };
+
+  const handlePipelineNew = () => {
+    pipelineNewClient.sendRequest();
+  };
+
+  React.useEffect(() => {
+    if (!pipelineNewClient.response) return;
+
+    setPipeline(pipelineNewClient.response.data);
+  }, [pipelineNewClient.response]);
 
   const handleSave = () => {
     if (saved) {
@@ -123,8 +112,11 @@ function Pipeline() {
   };
 
   const component = React.useMemo(
-    () => (componentOrder !== null ? components[componentOrder] : null),
-    [components, componentOrder],
+    () =>
+      componentId !== null
+        ? components.find((c) => c.id === componentId) ?? null
+        : null,
+    [components, componentId],
   );
 
   const handleUnsave = () => {
@@ -137,11 +129,16 @@ function Pipeline() {
   };
 
   const updateComponentsFromEditor = () => {
-    if (componentOrder === null) {
+    if (componentId === null) {
       return;
     }
 
-    const currComp = components[componentOrder];
+    const currComp = components.find((c) => c.id === componentId);
+
+    if (!currComp) {
+      return;
+    }
+
     setComponents(
       components.map((comp) => {
         if (comp.id === currComp.id) {
@@ -182,10 +179,10 @@ function Pipeline() {
   };
 
   const handleSetComponent = (c: ComponentInstance | null) => {
-    if (componentOrder !== null && c) {
+    if (componentId !== null && c) {
       updateComponentsFromEditor();
     }
-    setComponentOrder(c?.order ?? null);
+    setComponentId(c?.id ?? null);
     // No need to unsave because this is only called when component is selected
   };
 
@@ -281,6 +278,15 @@ function Pipeline() {
               }}
               wrapper={
                 <Box display="flex" flexDirection="column" maxHeight="100%" />
+              }
+              trailing={
+                !pipelineOpened ? (
+                  <Tooltip title="New" placement="top">
+                    <IconButton edge="end" onClick={handlePipelineNew}>
+                      <AddCircleOutlineIcon />
+                    </IconButton>
+                  </Tooltip>
+                ) : undefined
               }
             >
               {pipelineOpened && pipeline ? (

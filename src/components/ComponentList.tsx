@@ -27,8 +27,12 @@ import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import Tooltip from '@mui/material/Tooltip';
 import { alpha } from '@mui/material';
-import ComponentInstance from '../models/ComponentInstance';
+import {
+  ComponentInstance,
+  deleteComponentInstanceDelete,
+} from '../models/ComponentInstance';
 import Panel from './Panel';
+import useComposerAxios from '../hooks/useComposerAxios';
 
 const reorder = (list: any[], startIndex: number, endIndex: number) => {
   const result = Array.from(list);
@@ -55,6 +59,8 @@ const renderItem =
     const [deleteDialog, setDeleteDialog] = React.useState(false);
     const thisComponent = components[rubric.source.index];
 
+    const componentInstanceDeleteClient = useComposerAxios();
+
     const handleMouseDownStopPropagation = (e: React.MouseEvent) => {
       e.stopPropagation();
     };
@@ -76,17 +82,28 @@ const renderItem =
 
     const handleComponentDelete = (e: React.MouseEvent) => {
       e.stopPropagation();
-      // TODO: Delete from backend
-      console.log('TODO: Delete from backend', component);
-      const newComps = components.filter(
+      componentInstanceDeleteClient.sendRequest(
+        deleteComponentInstanceDelete(thisComponent.id),
+      );
+    };
+
+    React.useEffect(() => {
+      if (!componentInstanceDeleteClient.response) return;
+
+      let newComps = components.filter(
         (comp: ComponentInstance) => comp.id !== thisComponent.id,
       );
+      newComps = newComps.map((comp: ComponentInstance, index: number) => ({
+        ...comp,
+        order: index,
+      }));
       setComponents(newComps);
 
       if (component?.id === thisComponent.id) {
         setMode(null);
       }
-    };
+      handleDialogClose();
+    }, [componentInstanceDeleteClient.response]);
 
     const handleComponentSelect = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -100,7 +117,7 @@ const renderItem =
         if (comp.id === thisComponent.id) {
           return {
             ...comp,
-            isEnabled: e.target.checked,
+            is_enabled: e.target.checked,
           };
         }
 
@@ -143,7 +160,7 @@ const renderItem =
                       theme.palette.action.selectedOpacity,
                     )
                   : 'transparent',
-              color: thisComponent.isEnabled
+              color: thisComponent.is_enabled
                 ? undefined
                 : theme.palette.text.disabled,
               transition: theme.transitions.create('all', {
@@ -175,11 +192,11 @@ const renderItem =
                 <DragIndicatorIcon color="primary" />
               </Box>
               <Box width={8} />
-              <Tooltip title={thisComponent.isEnabled ? 'Disable' : 'Enable'}>
+              <Tooltip title={thisComponent.is_enabled ? 'Disable' : 'Enable'}>
                 <Checkbox
                   edge="start"
                   size="small"
-                  checked={thisComponent.isEnabled}
+                  checked={thisComponent.is_enabled}
                   onChange={handleCheckbox}
                   onMouseDown={handleMouseDownStopPropagation}
                 />
@@ -291,11 +308,16 @@ function ComponentList({
       return;
     }
 
-    const newComps = reorder(
+    let newComps = reorder(
       components,
       result.source.index,
       result.destination.index,
     );
+
+    newComps = newComps.map((comp: ComponentInstance, index: number) => ({
+      ...comp,
+      order: index,
+    }));
 
     setComponents(newComps);
   };

@@ -1,14 +1,19 @@
+import { ComposerAxiosRequest } from '../hooks/useComposerAxios';
 import { JsonObject } from '../utils/JsonObject';
 
-interface Component {
+export interface Component {
   id: number;
   name: string;
-  functionName: string;
+  function_name: string;
   description: JsonObject;
   code: string;
   state: JsonObject;
-  isTemplate: boolean;
-  createdAt: Date;
+  is_template: boolean;
+  created_at: string;
 }
 
-export default Component;
+export const getComponent = (id: number) =>
+  ({
+    url: `/conductor/component/details/${id}/`,
+    method: 'get',
+  }) as ComposerAxiosRequest;

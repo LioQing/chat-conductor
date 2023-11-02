@@ -14,6 +14,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
 import SchemaIcon from '@mui/icons-material/Schema';
 import { alpha } from '@mui/material';
+import { useCookies } from 'react-cookie';
 
 const pages = [
   {
@@ -63,6 +64,7 @@ export interface NavBarProps {
 function NavBar({ children }: NavBarProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [, , removeCookie] = useCookies();
   const theme = useTheme();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
 
@@ -80,8 +82,8 @@ function NavBar({ children }: NavBarProps) {
   };
 
   const handleLogout = () => {
-    // TODO: Modify cookie
-    console.log('TODO: Modify cookie');
+    removeCookie('access-token');
+    removeCookie('refresh-token');
     navigate('/login/');
   };
 
@@ -108,13 +110,14 @@ function NavBar({ children }: NavBarProps) {
                   key={path}
                   sx={{
                     display: 'block',
-                    backgroundColor:
-                      path === location.pathname
-                        ? alpha(
-                            theme.palette.primary.main,
-                            theme.palette.action.selectedOpacity,
-                          )
-                        : undefined,
+                    backgroundColor: location.pathname.startsWith(
+                      path.slice(0, -1),
+                    )
+                      ? alpha(
+                          theme.palette.primary.main,
+                          theme.palette.action.selectedOpacity,
+                        )
+                      : undefined,
                   }}
                   onClick={() => {
                     if (path !== location.pathname) navigate(path);

@@ -4,39 +4,136 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import useTheme from '@mui/material/styles/useTheme';
 import TextField from '@mui/material/TextField';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 import { alpha } from '@mui/material';
 import Collapsible from '../components/Collapsible';
 import Panel from '../components/Panel';
-import User from '../models/User';
+import { Account as AccountModel, getAccount } from '../models/Account';
+import useComposerAxios from '../hooks/useComposerAxios';
+import {
+  AccountPasswordChangeRequest,
+  patchAccountPasswordChange,
+} from '../models/AccountPasswordChange';
 
 function Account() {
   const theme = useTheme();
   const [passwordHeight, setPasswordHeight] = React.useState(0);
   const [changingPassword, setChangingPassword] = React.useState(false);
+  const [newPasswordError, setNewPasswordError] = React.useState<string | null>(
+    null,
+  );
+  const [oldPasswordError, setOldPasswordError] = React.useState<string | null>(
+    null,
+  );
+  const [confirmPasswordError, setConfirmPasswordError] = React.useState<
+    string | null
+  >(null);
+  const [passwordChangeSuccess, setPasswordChangeSuccess] =
+    React.useState<boolean>(false);
   const changePasswordRef = React.useRef<HTMLDivElement>(null);
 
-  // TODO: Get user data from backend
-  console.log('TODO: Get user data from backend');
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [user, setUser] = React.useState<User>({
-    username: 'test_account',
-    name: 'Test Account',
-    email: 'test@test.com',
+  const [account, setAccount] = React.useState<AccountModel>({
+    id: 0,
+    username: '',
+    name: '',
+    email: '',
+    is_whitelisted: false,
+    date_joined: new Date().toISOString(),
   });
+
+  const accountClient = useComposerAxios<AccountModel>(getAccount());
+  const accountPasswordChangeClient = useComposerAxios<
+    {},
+    AccountPasswordChangeRequest
+  >();
+
+  React.useEffect(() => {
+    accountClient.sendRequest();
+  }, []);
+
+  React.useEffect(() => {
+    if (!accountClient.response) return;
+
+    setAccount(accountClient.response.data);
+  }, [accountClient.response]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const data = new FormData(event.currentTarget);
 
-    // TODO: Add password change
-    console.log('TODO: Add password change');
-    console.log({
-      username: data.get('oldPassword'),
-      password: data.get('newPassword'),
-      remember: data.get('confirmPassword'),
-    });
-    setChangingPassword(false);
+    // validation
+    setOldPasswordError(null);
+    setNewPasswordError(null);
+    setConfirmPasswordError(null);
+    let areValid = true;
+
+    if (!data.get('oldPassword')) {
+      setOldPasswordError('This field may not be blank');
+      areValid = false;
+    }
+
+    if (!data.get('newPassword')) {
+      setNewPasswordError('This field may not be blank');
+      areValid = false;
+    }
+
+    if (!data.get('confirmPassword')) {
+      setConfirmPasswordError('This field may not be blank');
+      areValid = false;
+    }
+
+    if (data.get('newPassword') !== data.get('confirmPassword')) {
+      setConfirmPasswordError('Passwords do not match');
+      areValid = false;
+    }
+
+    if (!areValid) {
+      return;
+    }
+
+    // send request
+    const request = {
+      old_password: data.get('oldPassword'),
+      new_password: data.get('newPassword'),
+    } as AccountPasswordChangeRequest;
+    accountPasswordChangeClient.sendRequest(
+      patchAccountPasswordChange(request),
+    );
+  };
+
+  React.useEffect(() => {
+    if (!accountPasswordChangeClient.response) return;
+
+    if (accountPasswordChangeClient.response.status === 200) {
+      setChangingPassword(false);
+      setOldPasswordError(null);
+      setNewPasswordError(null);
+      setConfirmPasswordError(null);
+      changePasswordRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+
+      setPasswordChangeSuccess(true);
+    }
+  }, [accountPasswordChangeClient.response]);
+
+  React.useEffect(() => {
+    if (!accountPasswordChangeClient.error) return;
+
+    console.log(accountPasswordChangeClient.error);
+    if (accountPasswordChangeClient.error.response?.status === 400) {
+      const { data } = accountPasswordChangeClient.error.response;
+      setOldPasswordError((data as any).detail);
+    } else {
+      setOldPasswordError(accountPasswordChangeClient.error.message);
+    }
+  }, [accountPasswordChangeClient.error]);
+
+  const handlePasswordChangeSuccessClose = () => {
+    setPasswordChangeSuccess(false);
   };
 
   const changePasswordPanel = (
@@ -45,30 +142,36 @@ function Account() {
         <Box component="form" onSubmit={handleSubmit}>
           <TextField
             margin="normal"
-            required
             fullWidth
             id="oldPassword"
             label="Old Password"
             name="oldPassword"
+            type="password"
             autoComplete="current-password"
+            error={!!oldPasswordError}
+            helperText={oldPasswordError}
           />
           <TextField
             margin="normal"
-            required
             fullWidth
             id="newPassword"
             label="New Password"
             name="newPassword"
+            type="password"
             autoComplete="new-password"
+            error={!!newPasswordError}
+            helperText={newPasswordError}
           />
           <TextField
             margin="normal"
-            required
             fullWidth
             id="confirmPassword"
             label="Confirm Password"
             name="confirmPassword"
+            type="password"
             autoComplete="new-password"
+            error={!!confirmPasswordError}
+            helperText={confirmPasswordError}
           />
           <Box display="flex" flexDirection="row" gap={1} mt={2}>
             <Button
@@ -89,70 +192,94 @@ function Account() {
   );
 
   return (
-    <Panel title={user.name}>
-      <Box display="flex" flexDirection="row" mb={1}>
-        <Box display="flex" flexDirection="column">
-          <Box display="flex" flexDirection="row">
-            <Box mr={1}>Username:</Box>
-            <Box>{user.username}</Box>
-          </Box>
-          <Box display="flex" flexDirection="row">
-            <Box mr={1}>Email:</Box>
-            <Box>{user.email}</Box>
-          </Box>
-        </Box>
-      </Box>
-      <Box display="flex" flexDirection="column" justifyItems="left">
-        <Typography variant="h6" gutterBottom>
-          Security
-        </Typography>
-        <Box display="flex" flexDirection="column">
-          <Box
-            display="flex"
-            flexDirection="row"
-            gap={1}
-            width="100%"
-            justifyContent="flex-start"
-          >
-            <Button
-              variant="outlined"
-              onClick={() => setChangingPassword(!changingPassword)}
-              sx={{
-                backgroundColor: changingPassword
-                  ? alpha(
-                      theme.palette.primary.main,
-                      theme.palette.action.selectedOpacity,
-                    )
-                  : undefined,
-              }}
-            >
-              Change Password
-            </Button>
-          </Box>
-          <Box
-            width="100%"
-            height={`calc(${passwordHeight}px - 16px)`}
-            sx={{ transition: theme.transitions.create('all') }}
-          >
-            <Box width="100%" height="8px" />
-            <Box position="relative" left="-8px" top="-8px">
-              <Collapsible
-                collapsed={!changingPassword}
-                extraHeight={16}
-                onCollapse={(width: number, height: number) => {
-                  setPasswordHeight(height);
-                }}
-                sx={{
-                  width: 'calc(100% + 16px)',
-                }}
-              >
-                {changePasswordPanel}
-              </Collapsible>
+    <>
+      <Panel title={account.name}>
+        <Box display="flex" flexDirection="row" mb={1}>
+          <Box display="flex" flexDirection="column">
+            <Box display="flex" flexDirection="row">
+              <Box mr={1}>Username:</Box>
+              <Box>{account.username}</Box>
+            </Box>
+            <Box display="flex" flexDirection="row">
+              <Box mr={1}>Email:</Box>
+              <Box>{account.email}</Box>
+            </Box>
+            <Box display="flex" flexDirection="row">
+              <Box mr={1}>User ID:</Box>
+              <Box>{account.id}</Box>
+            </Box>
+            <Box display="flex" flexDirection="row">
+              <Box mr={1}>Is Whitelisted:</Box>
+              <Box>{account.is_whitelisted ? 'Yes' : 'No'}</Box>
+            </Box>
+            <Box display="flex" flexDirection="row">
+              <Box mr={1}>Date Joined:</Box>
+              <Box>{new Date(account.date_joined).toLocaleString()}</Box>
             </Box>
           </Box>
         </Box>
-      </Box>
-    </Panel>
+        <Box display="flex" flexDirection="column" justifyItems="left">
+          <Typography variant="h6" gutterBottom>
+            Security
+          </Typography>
+          <Box display="flex" flexDirection="column">
+            <Box
+              display="flex"
+              flexDirection="row"
+              gap={1}
+              width="100%"
+              justifyContent="flex-start"
+              alignItems="center"
+            >
+              <Button
+                variant="outlined"
+                onClick={() => setChangingPassword(!changingPassword)}
+                sx={{
+                  backgroundColor: changingPassword
+                    ? alpha(
+                        theme.palette.primary.main,
+                        theme.palette.action.selectedOpacity,
+                      )
+                    : undefined,
+                }}
+              >
+                Change Password
+              </Button>
+            </Box>
+            <Box
+              width="100%"
+              height={`calc(${passwordHeight}px - 16px)`}
+              sx={{ transition: theme.transitions.create('all') }}
+            >
+              <Box width="100%" height="16px" />
+              <Box position="relative" left="-8px" top="-8px">
+                <Collapsible
+                  collapsed={!changingPassword}
+                  extraHeight={16}
+                  onCollapse={(width: number, height: number) => {
+                    setPasswordHeight(height);
+                  }}
+                  sx={{
+                    width: 'calc(100% + 16px)',
+                  }}
+                >
+                  {changePasswordPanel}
+                </Collapsible>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      </Panel>
+      <Snackbar
+        open={!!passwordChangeSuccess}
+        autoHideDuration={6000}
+        onClose={handlePasswordChangeSuccessClose}
+      >
+        <Alert severity="success" onClose={handlePasswordChangeSuccessClose}>
+          Password changed successfully!
+        </Alert>
+      </Snackbar>
+    </>
   );
 }
 

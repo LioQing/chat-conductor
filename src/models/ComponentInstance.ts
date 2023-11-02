@@ -1,8 +1,20 @@
-import Component from './Component';
+import { ComposerAxiosRequest } from '../hooks/useComposerAxios';
+import { Component } from './Component';
 
-interface ComponentInstance extends Component {
-  isEnabled: boolean;
+export interface ComponentInstance extends Component {
+  component_id: number;
+  is_enabled: boolean;
   order: number;
 }
 
-export default ComponentInstance;
+export const getComponentInstance = (pipeline: number) =>
+  ({
+    url: `/conductor/pipeline/component-instance/${pipeline}/`,
+    method: 'get',
+  }) as ComposerAxiosRequest;
+
+export const deleteComponentInstanceDelete = (id: number) =>
+  ({
+    url: `/conductor/pipeline/component-instance/delete/${id}/`,
+    method: 'delete',
+  }) as ComposerAxiosRequest;
