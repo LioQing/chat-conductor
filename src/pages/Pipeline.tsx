@@ -26,6 +26,11 @@ import {
 import Prompt from '../components/Prompt';
 import { JsonObject } from '../utils/JsonObject';
 import useComposerAxios from '../hooks/useComposerAxios';
+import {
+  PipelineSaveComponentInstance,
+  PipelineSaveRequest,
+  patchPipelineSave,
+} from '../models/PipelineSave';
 
 const unsaveMessage =
   'You have unsaved changes. Are you sure you want to leave?';
@@ -50,6 +55,7 @@ function Pipeline() {
   const pipelineNewClient = useComposerAxios<PipelineModel>(postPipelineNew());
   const pipelineComponentInstanceClient =
     useComposerAxios<ComponentInstance[]>();
+  const pipelineSaveClient = useComposerAxios<{}, PipelineSaveRequest>();
 
   React.useEffect(() => {
     if (pipeline) {
@@ -99,17 +105,48 @@ function Pipeline() {
       return;
     }
 
-    pipelineEditorRef.current?.setIsSaving(true);
-    updateComponentsFromEditor();
+    if (
+      pipelineEditorRef.current === null ||
+      inspectPipelineRef.current === null ||
+      pipeline === null
+    ) {
+      console.error('Pipeline editor or pipeline is null');
+      return;
+    }
 
-    // TODO: Save to backend
-    console.log('TODO: Save to backend');
-    console.log(
-      'Pipeline name: ',
-      inspectPipelineRef.current?.getPipelineName(),
+    pipelineEditorRef.current.setIsSaving(true);
+    const newComps = updateComponentsFromEditor();
+
+    const pipelineSaveRequest: PipelineSaveRequest = {
+      name: inspectPipelineRef.current.getPipelineName(),
+      components: newComps.map(
+        (c: ComponentInstance): PipelineSaveComponentInstance => ({
+          id: c.id,
+          order: c.order,
+          is_enabled: c.is_enabled,
+          name: c.name,
+          function_name: c.function_name,
+          description: c.description,
+          code: c.code,
+          state: c.state,
+        }),
+      ),
+    };
+
+    pipelineSaveClient.sendRequest(
+      patchPipelineSave(pipeline.id, pipelineSaveRequest),
     );
-    setSaved(true);
   };
+
+  React.useEffect(() => {
+    if (!pipelineSaveClient.response) return;
+    setSaved(true);
+  }, [pipelineSaveClient.response]);
+
+  React.useEffect(() => {
+    if (!pipelineSaveClient.error) return;
+    console.error(pipelineSaveClient.error);
+  }, [pipelineSaveClient.error]);
 
   const component = React.useMemo(
     () =>
@@ -130,52 +167,54 @@ function Pipeline() {
 
   const updateComponentsFromEditor = () => {
     if (componentId === null) {
-      return;
+      return [];
     }
 
     const currComp = components.find((c) => c.id === componentId);
 
     if (!currComp) {
-      return;
+      return [];
     }
 
-    setComponents(
-      components.map((comp) => {
-        if (comp.id === currComp.id) {
-          const editorUpdate: {
-            name?: string;
-            functionName?: string;
-            description?: string;
-            code?: string;
-            state?: JsonObject;
-          } = {};
-          if (pipelineEditorRef.current?.getName() !== undefined) {
-            editorUpdate.name = pipelineEditorRef.current?.getName();
-          }
-          if (pipelineEditorRef.current?.getFunctionName() !== undefined) {
-            editorUpdate.functionName =
-              pipelineEditorRef.current?.getFunctionName();
-          }
-          if (pipelineEditorRef.current?.getDescription() !== undefined) {
-            editorUpdate.description =
-              pipelineEditorRef.current?.getDescription();
-          }
-          if (pipelineEditorRef.current?.getCode() !== undefined) {
-            editorUpdate.code = pipelineEditorRef.current?.getCode();
-          }
-          if (pipelineEditorRef.current?.getState() !== undefined) {
-            editorUpdate.state = pipelineEditorRef.current?.getState();
-          }
-
-          return {
-            ...comp,
-            ...editorUpdate,
-          } as ComponentInstance;
+    const newComps = components.map((comp) => {
+      if (comp.id === currComp.id) {
+        const editorUpdate: {
+          name?: string;
+          functionName?: string;
+          description?: string;
+          code?: string;
+          state?: JsonObject;
+        } = {};
+        if (pipelineEditorRef.current?.getName() !== undefined) {
+          editorUpdate.name = pipelineEditorRef.current?.getName();
+        }
+        if (pipelineEditorRef.current?.getFunctionName() !== undefined) {
+          editorUpdate.functionName =
+            pipelineEditorRef.current?.getFunctionName();
+        }
+        if (pipelineEditorRef.current?.getDescription() !== undefined) {
+          editorUpdate.description =
+            pipelineEditorRef.current?.getDescription();
+        }
+        if (pipelineEditorRef.current?.getCode() !== undefined) {
+          editorUpdate.code = pipelineEditorRef.current?.getCode();
+        }
+        if (pipelineEditorRef.current?.getState() !== undefined) {
+          editorUpdate.state = pipelineEditorRef.current?.getState();
         }
 
-        return comp;
-      }),
-    );
+        return {
+          ...comp,
+          ...editorUpdate,
+        } as ComponentInstance;
+      }
+
+      return comp;
+    });
+
+    setComponents(newComps);
+
+    return newComps;
   };
 
   const handleSetComponent = (c: ComponentInstance | null) => {
@@ -313,7 +352,7 @@ function Pipeline() {
                   mode={mode}
                   onUnsave={handleUnsave}
                 />
-                <Chat height={editorHeight} />
+                <Chat pipeline={pipeline} height={editorHeight} />
               </>
             )}
           </Box>

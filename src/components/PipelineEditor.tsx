@@ -63,6 +63,7 @@ const PipelineEditor = React.forwardRef(
       }
 
       setCode(v ?? '');
+      onUnsave();
     };
 
     React.useEffect(() => {

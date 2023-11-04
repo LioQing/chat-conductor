@@ -8,23 +8,110 @@ import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import LayersClearIcon from '@mui/icons-material/LayersClear';
 import Typography from '@mui/material/Typography';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 import { alpha, useTheme } from '@mui/material';
 import Panel from './Panel';
-import Message, { Role } from '../models/Message';
+import useComposerAxios from '../hooks/useComposerAxios';
+import {
+  ChatHistory,
+  ChatHistoryParams,
+  getChatHistory,
+} from '../models/ChatHistory';
+import { Pipeline } from '../models/Pipeline';
+import { ChatSend, ChatSendRequest, postChatSend } from '../models/ChatSend';
 
 export interface ChatProps {
   height: number;
+  pipeline: Pipeline;
 }
 
-function Chat({ height }: ChatProps) {
+enum Role {
+  User,
+  Assistant,
+}
+
+interface Message {
+  id: string; // `user${chat history id}` or `assi${chat history id}` or `usertemp${index}`
+  role: Role;
+  content: string;
+}
+
+function Chat({ height, pipeline }: ChatProps) {
   const theme = useTheme();
   const [inputMessage, setInputMessage] = React.useState('');
   const [disabled, setDisabled] = React.useState(false);
   const [messagesHeight, setMessagesHeight] = React.useState(0);
   // TODO: Get from backend
   const [messages, setMessages] = React.useState<Message[]>([]);
+  const [chatErrorOpened, setChatErrorOpened] = React.useState(false);
+  const [chatError, setChatError] = React.useState<string | null>(null);
   const messageRowRef = React.useRef<HTMLDivElement>(null);
   const messagesBottomRef = React.useRef<HTMLDivElement>(null);
+
+  const chatHistoryClient = useComposerAxios<ChatHistory[]>();
+  const chatSendClient = useComposerAxios<ChatSend, ChatSendRequest>();
+
+  const fetchChatHistory = () => {
+    chatHistoryClient.sendRequest(
+      getChatHistory(pipeline.id, {
+        page: 1,
+        page_size: 20,
+      } as ChatHistoryParams),
+    );
+  };
+
+  React.useEffect(() => {
+    if (!chatHistoryClient.response) return;
+
+    // replace messages if it is empty
+    if (messages.length === 0) {
+      setMessages(
+        chatHistoryClient.response.data.flatMap((chatHistory) => [
+          {
+            id: `user${chatHistory.id}`,
+            role: Role.User,
+            content: chatHistory.user_message,
+          },
+          {
+            id: `assi${chatHistory.id}`,
+            role: Role.Assistant,
+            content: chatHistory.api_message,
+          },
+        ]),
+      );
+      return;
+    }
+
+    // else remove any "tempuser" message and then append new messages not in messages
+    const firstNotAppearedIndex = chatHistoryClient.response.data.findIndex(
+      (chatHistory) =>
+        !messages.some((message) => message.id === `user${chatHistory.id}`),
+    );
+    const newMessages = chatHistoryClient.response.data
+      .slice(firstNotAppearedIndex)
+      .flatMap((chatHistory) => [
+        {
+          id: `user${chatHistory.id}`,
+          role: Role.User,
+          content: chatHistory.user_message,
+        },
+        {
+          id: `assi${chatHistory.id}`,
+          role: Role.Assistant,
+          content: chatHistory.api_message,
+        },
+      ]);
+
+    setMessages([
+      ...messages.filter((message) => !message.id.startsWith('usertemp')),
+      ...newMessages,
+    ]);
+  }, [chatHistoryClient.response]);
+
+  React.useEffect(() => {
+    fetchChatHistory();
+  }, [pipeline]);
 
   const handleInputMessage = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputMessage(e.target.value);
@@ -41,31 +128,44 @@ function Chat({ height }: ChatProps) {
       return;
     }
 
-    // TODO: Send to backend
-    console.log('TODO: Send to backend');
+    // Set temp user message
     const userMessage = {
-      id: messages.length + 1,
+      id: `usertemp${messages.length}`,
       role: Role.User,
       content: inputMessage,
     } as Message;
     setMessages([...messages, userMessage]);
 
     setDisabled(true);
-    setTimeout(() => {
-      setMessages([
-        ...messages,
-        userMessage,
-        {
-          id: messages.length + 2,
-          role: Role.Assistant,
-          content: `Sample assistant response: ${inputMessage}`,
-        } as Message,
-      ]);
-      setDisabled(false);
-    }, 500);
-
     setInputMessage('');
+
+    // Call API
+    chatSendClient.sendRequest(
+      postChatSend(pipeline.id, {
+        user_message: userMessage.content,
+      } as ChatSendRequest),
+    );
   };
+
+  React.useEffect(() => {
+    if (!chatSendClient.response) return;
+
+    fetchChatHistory();
+    setDisabled(false);
+  }, [chatSendClient.response]);
+
+  React.useEffect(() => {
+    if (!chatSendClient.error) return;
+
+    // Remove temp user message
+    setMessages(
+      messages.filter((message) => !message.id.startsWith('usertemp')),
+    );
+
+    setChatError(chatSendClient.error.toString());
+    setChatErrorOpened(true);
+    setDisabled(false);
+  }, [chatSendClient.error]);
 
   const handleClearHistory = () => {};
 
@@ -148,60 +248,78 @@ function Chat({ height }: ChatProps) {
   );
 
   return (
-    <Panel
-      title="Chat"
-      sx={{ width: '30%', height }}
-      wrapper={<Box display="flex" flexDirection="column" height="100%" />}
-    >
-      <Box
-        display="flex"
-        flexDirection="column"
-        height="100%"
-        minHeight={0}
-        gap={1}
+    <>
+      <Panel
+        title="Chat"
+        sx={{ width: '30%', height }}
+        wrapper={<Box display="flex" flexDirection="column" height="100%" />}
       >
         <Box
-          height={`calc(100% - ${messagesHeight}px - 8px)`}
-          sx={{ overflowY: 'scroll' }}
+          display="flex"
+          flexDirection="column"
+          height="100%"
+          minHeight={0}
+          gap={1}
         >
           <Box
-            display="flex"
-            flexDirection="column"
-            justifyContent="flex-end"
-            p={1}
-            gap={1}
+            height={`calc(100% - ${messagesHeight}px - 8px)`}
+            sx={{ overflowY: 'scroll' }}
           >
-            {messages.map((message) => (
-              <Box
-                key={message.id}
-                display="flex"
-                flexDirection="row"
-                justifyContent={
-                  message.role === Role.User ? 'flex-end' : 'flex-start'
-                }
-              >
-                <Paper
-                  sx={{
-                    p: 1,
-                    maxWidth: 'calc(100% - 16px)',
-                    backgroundColor:
-                      message.role === Role.User ? 'primary.main' : undefined,
-                    color:
-                      message.role === Role.User
-                        ? 'primary.contrastText'
-                        : 'patlette.text.primary',
-                  }}
+            <Box
+              display="flex"
+              flexDirection="column"
+              justifyContent="flex-end"
+              p={1}
+              gap={1}
+            >
+              {messages.map((message, i) => (
+                <Box
+                  key={i}
+                  display="flex"
+                  flexDirection="row"
+                  justifyContent={
+                    message.role === Role.User ? 'flex-end' : 'flex-start'
+                  }
                 >
-                  {message.content}
-                </Paper>
-              </Box>
-            ))}
-            <Box position="relative" top="100%" ref={messagesBottomRef} />
+                  <Paper
+                    sx={{
+                      p: 1,
+                      maxWidth: 'calc(100% - 16px)',
+                      backgroundColor:
+                        message.role === Role.User ? 'primary.main' : undefined,
+                      color:
+                        message.role === Role.User
+                          ? 'primary.contrastText'
+                          : 'patlette.text.primary',
+                      overflowWrap: 'break-word',
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      color="inherit"
+                      sx={{ whiteSpace: 'pre-line' }}
+                    >
+                      {message.content}
+                    </Typography>
+                  </Paper>
+                </Box>
+              ))}
+              <Box position="relative" top="100%" ref={messagesBottomRef} />
+            </Box>
           </Box>
+          {messageRow}
         </Box>
-        {messageRow}
-      </Box>
-    </Panel>
+      </Panel>
+      <Snackbar
+        open={chatErrorOpened}
+        autoHideDuration={6000}
+        onClose={() => setChatErrorOpened(false)}
+      >
+        <Alert onClose={() => setChatErrorOpened(false)} severity="error">
+          {chatError}
+        </Alert>
+      </Snackbar>
+    </>
   );
 }
 
