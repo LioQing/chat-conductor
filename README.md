@@ -29,6 +29,16 @@ node --version
 npm --version
 ```
 
+### Environment Variables
+
+Make a copy of the `.env.example` file and rename it to `.env`.
+
+```bash
+cp .env.example .env
+```
+
+Fill in the environment variables in the `.env` file.
+
 ### Install Dependencies
 
 Install the dependencies for the project.
