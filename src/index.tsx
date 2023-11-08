@@ -17,6 +17,7 @@ import './index.css';
 import Scaffold from './components/Scaffold';
 import Index from './pages/Index';
 import useLocalStorage from './hooks/useLocalStorage';
+import Admin from './pages/Admin';
 
 const baseTheme = {
   shape: {
@@ -75,6 +76,7 @@ const router = createBrowserRouter(
         <Route path="pipeline/" element={<Pipeline />} />
         <Route path="account/" element={<Account />} />
         <Route path="settings/" element={<Settings />} />
+        <Route path="admin/" element={<Admin />} />
       </Route>
       <Route path="/login/" element={<Login />} />
     </>,

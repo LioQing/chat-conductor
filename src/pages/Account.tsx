@@ -1,7 +1,6 @@
 import React from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Typography from '@mui/material/Typography';
 import useTheme from '@mui/material/styles/useTheme';
 import TextField from '@mui/material/TextField';
 import Snackbar from '@mui/material/Snackbar';
@@ -193,35 +192,34 @@ function Account() {
 
   return (
     <>
-      <Panel title={account.name}>
-        <Box display="flex" flexDirection="row" mb={1}>
-          <Box display="flex" flexDirection="column">
-            <Box display="flex" flexDirection="row">
-              <Box mr={1}>Username:</Box>
-              <Box>{account.username}</Box>
-            </Box>
-            <Box display="flex" flexDirection="row">
-              <Box mr={1}>Email:</Box>
-              <Box>{account.email}</Box>
-            </Box>
-            <Box display="flex" flexDirection="row">
-              <Box mr={1}>User ID:</Box>
-              <Box>{account.id}</Box>
-            </Box>
-            <Box display="flex" flexDirection="row">
-              <Box mr={1}>Is Whitelisted:</Box>
-              <Box>{account.is_whitelisted ? 'Yes' : 'No'}</Box>
-            </Box>
-            <Box display="flex" flexDirection="row">
-              <Box mr={1}>Date Joined:</Box>
-              <Box>{new Date(account.date_joined).toLocaleString()}</Box>
+      <Box display="flex" flexDirection="column" gap={2} width="100%">
+        <Panel title={account.name}>
+          <Box display="flex" flexDirection="row" mb={1}>
+            <Box display="flex" flexDirection="column">
+              <Box display="flex" flexDirection="row">
+                <Box mr={1}>Username:</Box>
+                <Box>{account.username}</Box>
+              </Box>
+              <Box display="flex" flexDirection="row">
+                <Box mr={1}>Email:</Box>
+                <Box>{account.email}</Box>
+              </Box>
+              <Box display="flex" flexDirection="row">
+                <Box mr={1}>User ID:</Box>
+                <Box>{account.id}</Box>
+              </Box>
+              <Box display="flex" flexDirection="row">
+                <Box mr={1}>Is Whitelisted:</Box>
+                <Box>{account.is_whitelisted ? 'Yes' : 'No'}</Box>
+              </Box>
+              <Box display="flex" flexDirection="row">
+                <Box mr={1}>Date Joined:</Box>
+                <Box>{new Date(account.date_joined).toLocaleString()}</Box>
+              </Box>
             </Box>
           </Box>
-        </Box>
-        <Box display="flex" flexDirection="column" justifyItems="left">
-          <Typography variant="h6" gutterBottom>
-            Security
-          </Typography>
+        </Panel>
+        <Panel title="Security">
           <Box display="flex" flexDirection="column">
             <Box
               display="flex"
@@ -268,8 +266,8 @@ function Account() {
               </Box>
             </Box>
           </Box>
-        </Box>
-      </Panel>
+        </Panel>
+      </Box>
       <Snackbar
         open={!!passwordChangeSuccess}
         autoHideDuration={6000}

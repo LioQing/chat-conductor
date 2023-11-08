@@ -103,7 +103,9 @@ function ComponentAttributes({
             sx={{ my: 1, flex: 1 }}
           />
         </Box>
-        <Typography variant="body2">Component ID: {component.id}</Typography>
+        <Typography variant="body2">
+          Component ID: {component.component_id}
+        </Typography>
         <Typography variant="body2">
           Created at: {component.created_at.toLocaleString()}
         </Typography>

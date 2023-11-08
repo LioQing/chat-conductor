@@ -8,6 +8,7 @@ import ComponentAttributes, {
 } from './ComponentAttributes';
 import { ComponentInstance } from '../models/ComponentInstance';
 import { JsonObject } from '../utils/JsonObject';
+import usePrevious from '../hooks/usePrevious';
 
 const componentToComponentAndStateKeys = (
   component: ComponentInstance | null,
@@ -45,6 +46,7 @@ const PipelineEditor = React.forwardRef(
     const [componentAndStateKeys, setComponentAndStateKeys] =
       React.useState<ComponentAndStateKeys | null>(null);
     const [isSaving, setIsSaving] = React.useState(false); // avoid unsaving when updated components during save
+    const prevMode = usePrevious(mode);
 
     const handleSetComponentAndStateKeysUnsave = (
       componentAndStateKeys: ComponentAndStateKeys | null,
@@ -76,7 +78,8 @@ const PipelineEditor = React.forwardRef(
       handleSetComponentAndStateKeysUnsave(
         componentToComponentAndStateKeys(component),
         Boolean(componentAndStateKeys) &&
-          componentAndStateKeys?.component.id === component?.id,
+          componentAndStateKeys?.component.id === component?.id &&
+          mode === prevMode,
       );
       setCode(component?.code ?? '');
     }, [component]);

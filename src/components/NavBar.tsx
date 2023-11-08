@@ -9,12 +9,15 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import IconButton from '@mui/material/IconButton';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
 import SchemaIcon from '@mui/icons-material/Schema';
 import { alpha } from '@mui/material';
 import { useCookies } from 'react-cookie';
+import useComposerAxios from '../hooks/useComposerAxios';
+import { IsAdmin, getIsAdmin } from '../models/AdminIsAdmin';
 
 const pages = [
   {
@@ -28,6 +31,12 @@ const pages = [
     path: '/account/',
   },
 ];
+
+const adminPage = {
+  icon: <AdminPanelSettingsIcon key="/account/" />,
+  label: 'Admin',
+  path: '/admin/',
+};
 
 interface ElevationScrollProps {
   window?: () => Window;
@@ -67,6 +76,19 @@ function NavBar({ children }: NavBarProps) {
   const [, , removeCookie] = useCookies();
   const theme = useTheme();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [isAdmin, setIsAdmin] = React.useState<boolean>(false);
+
+  const isAdminClient = useComposerAxios<IsAdmin>(getIsAdmin());
+
+  React.useEffect(() => {
+    isAdminClient.sendRequest();
+  }, []);
+
+  React.useEffect(() => {
+    if (!isAdminClient.response) return;
+
+    setIsAdmin(isAdminClient.response.data.is_admin);
+  }, [isAdminClient.response]);
 
   const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -87,6 +109,43 @@ function NavBar({ children }: NavBarProps) {
     navigate('/login/');
   };
 
+  const buildPageButton = ({
+    icon,
+    label,
+    path,
+  }: {
+    icon: React.ReactNode;
+    label: string;
+    path: string;
+  }) => (
+    <Button
+      key={path}
+      sx={{
+        display: 'block',
+        backgroundColor: location.pathname.startsWith(path.slice(0, -1))
+          ? alpha(
+              theme.palette.primary.main,
+              theme.palette.action.selectedOpacity,
+            )
+          : undefined,
+      }}
+      onClick={() => {
+        if (path !== location.pathname) navigate(path);
+      }}
+    >
+      <Box
+        display="flex"
+        flexDirection="row"
+        alignItems="center"
+        justifyContent="center"
+        gap={1}
+      >
+        {icon}
+        {label}
+      </Box>
+    </Button>
+  );
+
   return (
     <>
       <ElevationScroll>
@@ -105,36 +164,8 @@ function NavBar({ children }: NavBarProps) {
               justifyContent="space-evenly"
               gap={1}
             >
-              {pages.map(({ icon, label, path }) => (
-                <Button
-                  key={path}
-                  sx={{
-                    display: 'block',
-                    backgroundColor: location.pathname.startsWith(
-                      path.slice(0, -1),
-                    )
-                      ? alpha(
-                          theme.palette.primary.main,
-                          theme.palette.action.selectedOpacity,
-                        )
-                      : undefined,
-                  }}
-                  onClick={() => {
-                    if (path !== location.pathname) navigate(path);
-                  }}
-                >
-                  <Box
-                    display="flex"
-                    flexDirection="row"
-                    alignItems="center"
-                    justifyContent="center"
-                    gap={1}
-                  >
-                    {icon}
-                    {label}
-                  </Box>
-                </Button>
-              ))}
+              {pages.map(buildPageButton)}
+              {isAdmin && buildPageButton(adminPage)}
             </Box>
             <Box flexGrow={1} />
             <IconButton size="large" onClick={handleMenu} color="inherit">

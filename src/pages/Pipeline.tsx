@@ -180,7 +180,7 @@ function Pipeline() {
       if (comp.id === currComp.id) {
         const editorUpdate: {
           name?: string;
-          functionName?: string;
+          function_name?: string;
           description?: string;
           code?: string;
           state?: JsonObject;
@@ -189,7 +189,7 @@ function Pipeline() {
           editorUpdate.name = pipelineEditorRef.current?.getName();
         }
         if (pipelineEditorRef.current?.getFunctionName() !== undefined) {
-          editorUpdate.functionName =
+          editorUpdate.function_name =
             pipelineEditorRef.current?.getFunctionName();
         }
         if (pipelineEditorRef.current?.getDescription() !== undefined) {
