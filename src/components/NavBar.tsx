@@ -13,7 +13,10 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
+import Divider from '@mui/material/Divider';
 import SchemaIcon from '@mui/icons-material/Schema';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import LaunchIcon from '@mui/icons-material/Launch';
 import { alpha } from '@mui/material';
 import { useCookies } from 'react-cookie';
 import useComposerAxios from '../hooks/useComposerAxios';
@@ -155,22 +158,50 @@ function NavBar({ children }: NavBarProps) {
           }}
         >
           <Toolbar>
-            <Typography variant="h6" component="div" mr={2}>
-              Chat Conductor
-            </Typography>
             <Box
               display="flex"
               flexDirection="row"
-              justifyContent="space-evenly"
-              gap={1}
+              gap={2}
+              alignItems="center"
+              sx={{ width: '100%' }}
             >
-              {pages.map(buildPageButton)}
-              {isAdmin && buildPageButton(adminPage)}
+              <Typography variant="h6" component="div">
+                Chat Conductor
+              </Typography>
+              <Divider orientation="vertical" flexItem />
+              <Box
+                display="flex"
+                flexDirection="row"
+                justifyContent="space-evenly"
+                gap={1}
+              >
+                {pages.map(buildPageButton)}
+                {isAdmin && buildPageButton(adminPage)}
+              </Box>
+              <Box flexGrow={1} />
+              <Box display="flex" flexDirection="row" gap={1}>
+                <Button
+                  size="small"
+                  href="https://github.com/LioQing/chat-composer/tree/main/docs"
+                  target="_blank"
+                  endIcon={<LaunchIcon />}
+                >
+                  Docs
+                </Button>
+                <Button
+                  size="small"
+                  href="https://github.com/LioQing/chat-composer"
+                  target="_blank"
+                  endIcon={<GitHubIcon />}
+                >
+                  Source
+                </Button>
+              </Box>
+              <Divider orientation="vertical" flexItem />
+              <IconButton size="large" onClick={handleMenu} color="inherit">
+                <AccountCircle />
+              </IconButton>
             </Box>
-            <Box flexGrow={1} />
-            <IconButton size="large" onClick={handleMenu} color="inherit">
-              <AccountCircle />
-            </IconButton>
           </Toolbar>
         </AppBar>
       </ElevationScroll>
