@@ -2,7 +2,6 @@ import React from 'react';
 import Editor from '@monaco-editor/react';
 import Box from '@mui/material/Box';
 import { useTheme } from '@mui/material/styles';
-import Panel from './Panel';
 import ComponentAttributes, {
   ComponentAndStateKeys,
 } from './ComponentAttributes';
@@ -33,14 +32,13 @@ export interface PipelineEditorRef {
 }
 
 export interface PipelineEditorProps {
-  height: number;
   component: ComponentInstance | null;
   mode: 'code' | 'attr' | null;
   onUnsave: () => void;
 }
 
 const PipelineEditor = React.forwardRef(
-  ({ height, component, mode, onUnsave }: PipelineEditorProps, ref) => {
+  ({ component, mode, onUnsave }: PipelineEditorProps, ref) => {
     const theme = useTheme();
     const [code, setCode] = React.useState(component?.code ?? '');
     const [componentAndStateKeys, setComponentAndStateKeys] =
@@ -84,18 +82,6 @@ const PipelineEditor = React.forwardRef(
       setCode(component?.code ?? '');
     }, [component]);
 
-    const title = React.useMemo(() => {
-      if (mode === 'code') {
-        return 'Code';
-      }
-
-      if (mode === 'attr') {
-        return 'Attributes';
-      }
-
-      return 'Nothing is selected';
-    }, [mode]);
-
     React.useImperativeHandle(
       ref,
       () =>
@@ -111,42 +97,31 @@ const PipelineEditor = React.forwardRef(
         }) as PipelineEditorRef,
     );
 
-    return (
-      <Panel
-        title={title}
-        titleSx={{ mx: 3 }}
-        wrapper={
-          <Box display="flex" flexDirection="column" height={height - 24 - 8} />
-        }
-        sx={{ px: 0, width: '40%', height }}
+    return mode === 'code' ? (
+      <Box
+        height="100%"
+        width="100%"
+        overflow="hidden"
+        borderRadius="8px"
+        px={3}
       >
-        {mode === 'code' ? (
-          <Box
-            height="100%"
-            width="100%"
-            overflow="hidden"
-            borderRadius="8px"
-            px={3}
-          >
-            <Editor
-              theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
-              language="python"
-              value={code}
-              onChange={handleChangeCode}
-            />
-          </Box>
-        ) : mode === 'attr' && componentAndStateKeys ? (
-          <Box sx={{ overflowY: 'auto' }}>
-            <Box px={3}>
-              <ComponentAttributes
-                componentAndStateKeys={componentAndStateKeys}
-                setComponentAndStateKeys={handleSetComponentAndStateKeysUnsave}
-              />
-            </Box>
-          </Box>
-        ) : null}
-      </Panel>
-    );
+        <Editor
+          theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
+          language="python"
+          value={code}
+          onChange={handleChangeCode}
+        />
+      </Box>
+    ) : mode === 'attr' && componentAndStateKeys ? (
+      <Box sx={{ overflowY: 'auto' }}>
+        <Box px={3}>
+          <ComponentAttributes
+            componentAndStateKeys={componentAndStateKeys}
+            setComponentAndStateKeys={handleSetComponentAndStateKeysUnsave}
+          />
+        </Box>
+      </Box>
+    ) : null;
   },
 );
 

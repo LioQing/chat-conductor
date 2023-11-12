@@ -11,7 +11,6 @@ import Typography from '@mui/material/Typography';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import { alpha, useTheme } from '@mui/material';
-import Panel from './Panel';
 import useComposerAxios from '../hooks/useComposerAxios';
 import {
   ChatHistory,
@@ -22,7 +21,6 @@ import { Pipeline } from '../models/Pipeline';
 import { ChatSend, ChatSendRequest, postChatSend } from '../models/ChatSend';
 
 export interface ChatProps {
-  height: number;
   pipeline: Pipeline;
 }
 
@@ -37,7 +35,7 @@ interface Message {
   content: string;
 }
 
-function Chat({ height, pipeline }: ChatProps) {
+function Chat({ pipeline }: ChatProps) {
   const theme = useTheme();
   const [inputMessage, setInputMessage] = React.useState('');
   const [disabled, setDisabled] = React.useState(false);
@@ -249,67 +247,61 @@ function Chat({ height, pipeline }: ChatProps) {
 
   return (
     <>
-      <Panel
-        title="Chat"
-        sx={{ width: '30%', height }}
-        wrapper={<Box display="flex" flexDirection="column" height="100%" />}
+      <Box
+        display="flex"
+        flexDirection="column"
+        height="100%"
+        minHeight={0}
+        gap={1}
       >
         <Box
-          display="flex"
-          flexDirection="column"
-          height="100%"
-          minHeight={0}
-          gap={1}
+          height={`calc(100% - ${messagesHeight}px - 8px)`}
+          sx={{ overflowY: 'scroll' }}
         >
           <Box
-            height={`calc(100% - ${messagesHeight}px - 8px)`}
-            sx={{ overflowY: 'scroll' }}
+            display="flex"
+            flexDirection="column"
+            justifyContent="flex-end"
+            p={1}
+            gap={1}
           >
-            <Box
-              display="flex"
-              flexDirection="column"
-              justifyContent="flex-end"
-              p={1}
-              gap={1}
-            >
-              {messages.map((message, i) => (
-                <Box
-                  key={i}
-                  display="flex"
-                  flexDirection="row"
-                  justifyContent={
-                    message.role === Role.User ? 'flex-end' : 'flex-start'
-                  }
+            {messages.map((message, i) => (
+              <Box
+                key={i}
+                display="flex"
+                flexDirection="row"
+                justifyContent={
+                  message.role === Role.User ? 'flex-end' : 'flex-start'
+                }
+              >
+                <Paper
+                  sx={{
+                    p: 1,
+                    maxWidth: 'calc(100% - 16px)',
+                    backgroundColor:
+                      message.role === Role.User ? 'primary.main' : undefined,
+                    color:
+                      message.role === Role.User
+                        ? 'primary.contrastText'
+                        : 'patlette.text.primary',
+                    overflowWrap: 'break-word',
+                  }}
                 >
-                  <Paper
-                    sx={{
-                      p: 1,
-                      maxWidth: 'calc(100% - 16px)',
-                      backgroundColor:
-                        message.role === Role.User ? 'primary.main' : undefined,
-                      color:
-                        message.role === Role.User
-                          ? 'primary.contrastText'
-                          : 'patlette.text.primary',
-                      overflowWrap: 'break-word',
-                    }}
+                  <Typography
+                    variant="body2"
+                    color="inherit"
+                    sx={{ whiteSpace: 'pre-line' }}
                   >
-                    <Typography
-                      variant="body2"
-                      color="inherit"
-                      sx={{ whiteSpace: 'pre-line' }}
-                    >
-                      {message.content}
-                    </Typography>
-                  </Paper>
-                </Box>
-              ))}
-              <Box position="relative" top="100%" ref={messagesBottomRef} />
-            </Box>
+                    {message.content}
+                  </Typography>
+                </Paper>
+              </Box>
+            ))}
+            <Box position="relative" top="100%" ref={messagesBottomRef} />
           </Box>
-          {messageRow}
         </Box>
-      </Panel>
+        {messageRow}
+      </Box>
       <Snackbar
         open={chatErrorOpened}
         autoHideDuration={6000}

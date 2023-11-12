@@ -4,9 +4,16 @@ import IconButton from '@mui/material/IconButton';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
 import useTheme from '@mui/material/styles/useTheme';
+import { alpha } from '@mui/material/styles';
 import Tooltip from '@mui/material/Tooltip';
 import TouchRipple from '@mui/material/ButtonBase/TouchRipple';
+import Divider from '@mui/material/Divider';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import {
+  PanelGroup,
+  Panel as ResizablePanel,
+  PanelResizeHandle,
+} from 'react-resizable-panels';
 import Panel from '../components/Panel';
 import PipelineList from '../components/PipelineList';
 import InspectPipeline, {
@@ -284,6 +291,130 @@ function Pipeline() {
     }
   }, [pipelineOpened, containerHeight]);
 
+  const editorTitle = React.useMemo(() => {
+    if (mode === 'code') {
+      return 'Code';
+    }
+
+    if (mode === 'attr') {
+      return 'Attributes';
+    }
+
+    return 'Nothing is selected';
+  }, [mode]);
+
+  const editorComponents = React.useMemo(
+    () => (
+      <>
+        <ResizablePanel collapsible>
+          <Panel
+            title={editorTitle}
+            titleSx={{ mx: 3 }}
+            wrapper={
+              <Box
+                display="flex"
+                flexDirection="column"
+                height={editorHeight - 24 - 8}
+              />
+            }
+            sx={{ px: 0, height: editorHeight }}
+          >
+            <PipelineEditor
+              ref={pipelineEditorRef}
+              component={component}
+              mode={mode}
+              onUnsave={handleUnsave}
+            />
+          </Panel>
+        </ResizablePanel>
+        <PanelResizeHandle>
+          <Box
+            p={0.5}
+            height="100%"
+            sx={{
+              '> *': {
+                backgroundColor: alpha(
+                  theme.palette.divider,
+                  theme.palette.action.focusOpacity,
+                ),
+              },
+              '&:hover': {
+                '> *': {
+                  backgroundColor: alpha(
+                    theme.palette.divider,
+                    theme.palette.action.focusOpacity * 1.5,
+                  ),
+                },
+              },
+              '&:active': {
+                '> *': {
+                  backgroundColor: alpha(
+                    theme.palette.divider,
+                    theme.palette.action.disabledOpacity,
+                  ),
+                },
+              },
+            }}
+          >
+            <Divider orientation="vertical" />
+          </Box>
+        </PanelResizeHandle>
+        <ResizablePanel collapsible>
+          <Panel
+            title="Chat"
+            sx={{ height: editorHeight }}
+            wrapper={
+              <Box display="flex" flexDirection="column" height="100%" />
+            }
+          >
+            <Chat pipeline={pipeline!} />
+          </Panel>
+        </ResizablePanel>
+      </>
+    ),
+    [pipelineOpened, pipeline, components, component, mode, editorHeight],
+  );
+
+  const pipelineListPanel = React.useMemo(
+    () => (
+      <Panel
+        title="Pipeline"
+        titleSx={{ px: 3 }}
+        sx={{
+          width: pipelineOpened ? undefined : 500,
+          height: pipelineOpened ? editorHeight : 'fit-content',
+          px: 0,
+        }}
+        wrapper={<Box display="flex" flexDirection="column" maxHeight="100%" />}
+        trailing={
+          !pipelineOpened ? (
+            <Tooltip title="New" placement="top">
+              <IconButton edge="end" onClick={handlePipelineNew}>
+                <AddCircleOutlineIcon />
+              </IconButton>
+            </Tooltip>
+          ) : undefined
+        }
+      >
+        {pipelineOpened && pipeline ? (
+          <InspectPipeline
+            ref={inspectPipelineRef}
+            pipeline={pipeline}
+            components={components}
+            setComponents={handleSetComponentsUnsave}
+            component={component}
+            setComponent={handleSetComponent}
+            setMode={setMode}
+            onUnsave={handleUnsave}
+          />
+        ) : (
+          <PipelineList setPipeline={setPipeline} />
+        )}
+      </Panel>
+    ),
+    [pipelineOpened, pipeline, components, component, mode, editorHeight],
+  );
+
   return (
     <Box
       display="flex"
@@ -298,65 +429,55 @@ function Pipeline() {
         beforeUnload
       />
       {React.useMemo(
-        () => (
-          <Box
-            display="flex"
-            flexDirection="row"
-            justifyContent="center"
-            width="100%"
-            height="100%"
-            gap={1}
-          >
-            <Panel
-              title="Pipeline"
-              titleSx={{ px: 3, flexShrink: 1 }}
-              sx={{
-                width: pipelineOpened ? '30%' : 500,
-                height: pipelineOpened ? editorHeight : 'fit-content',
-                px: 0,
-              }}
-              wrapper={
-                <Box display="flex" flexDirection="column" maxHeight="100%" />
-              }
-              trailing={
-                !pipelineOpened ? (
-                  <Tooltip title="New" placement="top">
-                    <IconButton edge="end" onClick={handlePipelineNew}>
-                      <AddCircleOutlineIcon />
-                    </IconButton>
-                  </Tooltip>
-                ) : undefined
-              }
+        () =>
+          pipelineOpened && pipeline ? (
+            <PanelGroup direction="horizontal">
+              <ResizablePanel collapsible>{pipelineListPanel}</ResizablePanel>
+              <PanelResizeHandle>
+                <Box
+                  p={0.5}
+                  height="100%"
+                  sx={{
+                    '> *': {
+                      backgroundColor: alpha(
+                        theme.palette.divider,
+                        theme.palette.action.focusOpacity,
+                      ),
+                    },
+                    '&:hover': {
+                      '> *': {
+                        backgroundColor: alpha(
+                          theme.palette.divider,
+                          theme.palette.action.focusOpacity * 1.5,
+                        ),
+                      },
+                    },
+                    '&:active': {
+                      '> *': {
+                        backgroundColor: alpha(
+                          theme.palette.divider,
+                          theme.palette.action.disabledOpacity,
+                        ),
+                      },
+                    },
+                  }}
+                >
+                  <Divider orientation="vertical" />
+                </Box>
+              </PanelResizeHandle>
+              {editorComponents}
+            </PanelGroup>
+          ) : (
+            <Box
+              display="flex"
+              justifyContent="center"
+              alignItems="center"
+              width="100%"
+              height="100%"
             >
-              {pipelineOpened && pipeline ? (
-                <InspectPipeline
-                  ref={inspectPipelineRef}
-                  pipeline={pipeline}
-                  components={components}
-                  setComponents={handleSetComponentsUnsave}
-                  component={component}
-                  setComponent={handleSetComponent}
-                  setMode={setMode}
-                  onUnsave={handleUnsave}
-                />
-              ) : (
-                <PipelineList setPipeline={setPipeline} />
-              )}
-            </Panel>
-            {pipelineOpened && pipeline && (
-              <>
-                <PipelineEditor
-                  ref={pipelineEditorRef}
-                  height={editorHeight}
-                  component={component}
-                  mode={mode}
-                  onUnsave={handleUnsave}
-                />
-                <Chat pipeline={pipeline} height={editorHeight} />
-              </>
-            )}
-          </Box>
-        ),
+              {pipelineListPanel}
+            </Box>
+          ),
         [pipelineOpened, pipeline, components, component, mode, editorHeight],
       )}
     </Box>
