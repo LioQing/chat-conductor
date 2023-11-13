@@ -80,6 +80,12 @@ function ComponentAttributes({
     });
   };
 
+  React.useEffect(() => {
+    if (!rteRef.current?.editor) return;
+
+    rteRef.current.editor.commands.setContent(component.description);
+  }, [component.id]);
+
   return (
     <Box display="flex" flexDirection="column" gap={1} minHeight={0} mb={1}>
       <Box>
