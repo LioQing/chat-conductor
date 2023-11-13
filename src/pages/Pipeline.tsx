@@ -86,6 +86,14 @@ function Pipeline() {
     setComponents(componentInstance);
   }, [pipelineComponentInstanceClient.response]);
 
+  const handlePipelineRun = React.useCallback(() => {
+    if (!pipeline) return;
+
+    pipelineComponentInstanceClient.sendRequest(
+      getComponentInstance(pipeline.id),
+    );
+  }, [pipelineComponentInstanceClient, pipeline]);
+
   const handlePipelineBack = () => {
     if (pipelineOpened && !saved) {
       if (!window.confirm(unsaveMessage)) {
@@ -306,7 +314,7 @@ function Pipeline() {
   const editorComponents = React.useMemo(
     () => (
       <>
-        <ResizablePanel collapsible>
+        <ResizablePanel id="editor" order={2} collapsible>
           <Panel
             title={editorTitle}
             titleSx={{ mx: 3 }}
@@ -359,7 +367,7 @@ function Pipeline() {
             <Divider orientation="vertical" />
           </Box>
         </PanelResizeHandle>
-        <ResizablePanel collapsible>
+        <ResizablePanel id="chat" order={3} collapsible>
           <Panel
             title="Chat"
             sx={{ height: editorHeight }}
@@ -367,7 +375,7 @@ function Pipeline() {
               <Box display="flex" flexDirection="column" height="100%" />
             }
           >
-            <Chat pipeline={pipeline!} />
+            <Chat pipeline={pipeline!} onPipelineRun={handlePipelineRun} />
           </Panel>
         </ResizablePanel>
       </>
@@ -431,8 +439,10 @@ function Pipeline() {
       {React.useMemo(
         () =>
           pipelineOpened && pipeline ? (
-            <PanelGroup direction="horizontal">
-              <ResizablePanel collapsible>{pipelineListPanel}</ResizablePanel>
+            <PanelGroup direction="horizontal" autoSaveId="editor-panel-group">
+              <ResizablePanel id="pipeline-list" order={1} collapsible>
+                {pipelineListPanel}
+              </ResizablePanel>
               <PanelResizeHandle>
                 <Box
                   p={0.5}

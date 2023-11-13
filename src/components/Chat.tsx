@@ -22,6 +22,7 @@ import { ChatSend, ChatSendRequest, postChatSend } from '../models/ChatSend';
 
 export interface ChatProps {
   pipeline: Pipeline;
+  onPipelineRun: () => void;
 }
 
 enum Role {
@@ -35,12 +36,11 @@ interface Message {
   content: string;
 }
 
-function Chat({ pipeline }: ChatProps) {
+function Chat({ pipeline, onPipelineRun }: ChatProps) {
   const theme = useTheme();
   const [inputMessage, setInputMessage] = React.useState('');
   const [disabled, setDisabled] = React.useState(false);
   const [messagesHeight, setMessagesHeight] = React.useState(0);
-  // TODO: Get from backend
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [chatErrorOpened, setChatErrorOpened] = React.useState(false);
   const [chatError, setChatError] = React.useState<string | null>(null);
@@ -67,14 +67,14 @@ function Chat({ pipeline }: ChatProps) {
       setMessages(
         chatHistoryClient.response.data.flatMap((chatHistory) => [
           {
-            id: `user${chatHistory.id}`,
-            role: Role.User,
-            content: chatHistory.user_message,
-          },
-          {
             id: `assi${chatHistory.id}`,
             role: Role.Assistant,
             content: chatHistory.api_message,
+          },
+          {
+            id: `user${chatHistory.id}`,
+            role: Role.User,
+            content: chatHistory.user_message,
           },
         ]),
       );
@@ -82,29 +82,32 @@ function Chat({ pipeline }: ChatProps) {
     }
 
     // else remove any "tempuser" message and then append new messages not in messages
-    const firstNotAppearedIndex = chatHistoryClient.response.data.findIndex(
-      (chatHistory) =>
-        !messages.some((message) => message.id === `user${chatHistory.id}`),
+    const firstNonTempId =
+      messages.find((message) => !message.id.startsWith('usertemp'))?.id ?? '';
+    const firstAppearedIndex = chatHistoryClient.response.data.findIndex(
+      (chatHistory) => `assi${chatHistory.id}` === firstNonTempId,
     );
     const newMessages = chatHistoryClient.response.data
-      .slice(firstNotAppearedIndex)
+      .slice(0, firstAppearedIndex)
       .flatMap((chatHistory) => [
-        {
-          id: `user${chatHistory.id}`,
-          role: Role.User,
-          content: chatHistory.user_message,
-        },
         {
           id: `assi${chatHistory.id}`,
           role: Role.Assistant,
           content: chatHistory.api_message,
         },
+        {
+          id: `user${chatHistory.id}`,
+          role: Role.User,
+          content: chatHistory.user_message,
+        },
       ]);
 
     setMessages([
-      ...messages.filter((message) => !message.id.startsWith('usertemp')),
       ...newMessages,
+      ...messages.filter((message) => !message.id.startsWith('usertemp')),
     ]);
+
+    onPipelineRun();
   }, [chatHistoryClient.response]);
 
   React.useEffect(() => {
@@ -132,7 +135,7 @@ function Chat({ pipeline }: ChatProps) {
       role: Role.User,
       content: inputMessage,
     } as Message;
-    setMessages([...messages, userMessage]);
+    setMessages([userMessage, ...messages]);
 
     setDisabled(true);
     setInputMessage('');
@@ -265,38 +268,41 @@ function Chat({ pipeline }: ChatProps) {
             p={1}
             gap={1}
           >
-            {messages.map((message, i) => (
-              <Box
-                key={i}
-                display="flex"
-                flexDirection="row"
-                justifyContent={
-                  message.role === Role.User ? 'flex-end' : 'flex-start'
-                }
-              >
-                <Paper
-                  sx={{
-                    p: 1,
-                    maxWidth: 'calc(100% - 16px)',
-                    backgroundColor:
-                      message.role === Role.User ? 'primary.main' : undefined,
-                    color:
-                      message.role === Role.User
-                        ? 'primary.contrastText'
-                        : 'patlette.text.primary',
-                    overflowWrap: 'break-word',
-                  }}
+            {messages
+              .slice(0)
+              .reverse()
+              .map((message: Message, i: number) => (
+                <Box
+                  key={i}
+                  display="flex"
+                  flexDirection="row"
+                  justifyContent={
+                    message.role === Role.User ? 'flex-end' : 'flex-start'
+                  }
                 >
-                  <Typography
-                    variant="body2"
-                    color="inherit"
-                    sx={{ whiteSpace: 'pre-line' }}
+                  <Paper
+                    sx={{
+                      p: 1,
+                      maxWidth: 'calc(100% - 16px)',
+                      backgroundColor:
+                        message.role === Role.User ? 'primary.main' : undefined,
+                      color:
+                        message.role === Role.User
+                          ? 'primary.contrastText'
+                          : 'patlette.text.primary',
+                      overflowWrap: 'break-word',
+                    }}
                   >
-                    {message.content}
-                  </Typography>
-                </Paper>
-              </Box>
-            ))}
+                    <Typography
+                      variant="body2"
+                      color="inherit"
+                      sx={{ whiteSpace: 'pre-line' }}
+                    >
+                      {message.content}
+                    </Typography>
+                  </Paper>
+                </Box>
+              ))}
             <Box position="relative" top="100%" ref={messagesBottomRef} />
           </Box>
         </Box>
