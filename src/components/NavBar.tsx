@@ -182,7 +182,7 @@ function NavBar({ children }: NavBarProps) {
               <Box display="flex" flexDirection="row" gap={1}>
                 <Button
                   size="small"
-                  href="https://github.com/LioQing/chat-composer/tree/main/docs"
+                  href="https://github.com/LioQing/chat-composer/blob/main/docs/README.md"
                   target="_blank"
                   endIcon={<LaunchIcon />}
                 >
