@@ -80,7 +80,9 @@ function Pipeline() {
   }, [pipeline]);
 
   React.useEffect(() => {
-    if (!pipelineComponentInstanceClient.response) return;
+    if (!pipelineComponentInstanceClient.response) {
+      return;
+    }
 
     const componentInstance = pipelineComponentInstanceClient.response.data;
     setComponents(componentInstance);
@@ -89,9 +91,11 @@ function Pipeline() {
   const handlePipelineRun = React.useCallback(() => {
     if (!pipeline) return;
 
+    pipelineEditorRef.current?.setIsRunning(true);
     pipelineComponentInstanceClient.sendRequest(
       getComponentInstance(pipeline.id),
     );
+    inspectPipelineRef.current?.onRun();
   }, [pipelineComponentInstanceClient, pipeline]);
 
   const handlePipelineBack = () => {
@@ -132,8 +136,15 @@ function Pipeline() {
     pipelineEditorRef.current.setIsSaving(true);
     const newComps = updateComponentsFromEditor();
 
+    const pstate = inspectPipelineRef.current.getPipelineState();
+    if (pstate === null) {
+      console.error('Pipeline state is null');
+      return;
+    }
+
     const pipelineSaveRequest: PipelineSaveRequest = {
       name: inspectPipelineRef.current.getPipelineName(),
+      state: pstate,
       components: newComps.map(
         (c: ComponentInstance): PipelineSaveComponentInstance => ({
           id: c.id,
@@ -196,7 +207,7 @@ function Pipeline() {
         const editorUpdate: {
           name?: string;
           function_name?: string;
-          description?: string;
+          description?: JsonObject;
           code?: string;
           state?: JsonObject;
         } = {};

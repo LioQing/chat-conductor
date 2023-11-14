@@ -25,10 +25,11 @@ const componentToComponentAndStateKeys = (
 export interface PipelineEditorRef {
   getName: () => string;
   getFunctionName: () => string;
-  getDescription: () => string;
+  getDescription: () => JsonObject;
   getCode: () => string;
   getState: () => JsonObject;
   setIsSaving: (isSaving: boolean) => void;
+  setIsRunning: (isRunning: boolean) => void;
 }
 
 export interface PipelineEditorProps {
@@ -44,6 +45,7 @@ const PipelineEditor = React.forwardRef(
     const [componentAndStateKeys, setComponentAndStateKeys] =
       React.useState<ComponentAndStateKeys | null>(null);
     const [isSaving, setIsSaving] = React.useState(false); // avoid unsaving when updated components during save
+    const [isRunning, setIsRunning] = React.useState(false); // avoid unsaving when updated components during running
     const prevMode = usePrevious(mode);
 
     const handleSetComponentAndStateKeysUnsave = (
@@ -51,6 +53,12 @@ const PipelineEditor = React.forwardRef(
       unsave: boolean = true,
     ) => {
       setComponentAndStateKeys(componentAndStateKeys);
+
+      if (isRunning) {
+        setIsRunning(false);
+        return;
+      }
+
       if (unsave) {
         onUnsave();
       }
@@ -84,17 +92,17 @@ const PipelineEditor = React.forwardRef(
 
     React.useImperativeHandle(
       ref,
-      () =>
-        ({
-          getName: () => componentAndStateKeys?.component.name ?? '',
-          getFunctionName: () =>
-            componentAndStateKeys?.component.function_name ?? '',
-          getDescription: () =>
-            componentAndStateKeys?.component.description ?? '',
-          getCode: () => code,
-          getState: () => componentAndStateKeys?.component.state ?? {},
-          setIsSaving: (isSaving: boolean) => setIsSaving(isSaving),
-        }) as PipelineEditorRef,
+      (): PipelineEditorRef => ({
+        getName: () => componentAndStateKeys?.component.name ?? '',
+        getFunctionName: () =>
+          componentAndStateKeys?.component.function_name ?? '',
+        getDescription: () =>
+          componentAndStateKeys?.component.description ?? {},
+        getCode: () => code,
+        getState: () => componentAndStateKeys?.component.state ?? {},
+        setIsSaving: (isSaving: boolean) => setIsSaving(isSaving),
+        setIsRunning: (isRunning: boolean) => setIsRunning(isRunning),
+      }),
     );
 
     return mode === 'code' ? (

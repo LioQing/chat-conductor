@@ -8,9 +8,12 @@ import Tooltip from '@mui/material/Tooltip';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import Dialog from '@mui/material/Dialog';
 import Button from '@mui/material/Button';
+import Collapse from '@mui/material/Collapse';
 import DialogActions from '@mui/material/DialogActions';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
+import useTheme from '@mui/material/styles/useTheme';
+import { alpha } from '@mui/material/styles';
 import ComponentList from './ComponentList';
 import { Pipeline } from '../models/Pipeline';
 import { ComponentInstance } from '../models/ComponentInstance';
@@ -23,9 +26,14 @@ import {
   ComponentInstanceNewRequest,
   postComponentInstanceNew,
 } from '../models/ComponentInstanceNew';
+import { JsonObject } from '../utils/JsonObject';
+import { PipelineState, getPipelineState } from '../models/PipelineState';
+import JsonEditor from './JsonEditor';
 
 export interface InspectPipelineRef {
   getPipelineName: () => string;
+  getPipelineState: () => JsonObject | null;
+  onRun: () => void;
 }
 
 export interface InspectPipelineProps {
@@ -51,11 +59,37 @@ const InspectPipeline = React.forwardRef(
     }: InspectPipelineProps,
     ref,
   ) => {
+    const theme = useTheme();
     const [pipelineName, setPipelineName] = React.useState(pipeline.name);
+    const [pipelineStateOpened, setPipelineStateOpened] = React.useState(false);
+    const [pipelineState, setPipelineState] = React.useState<JsonObject>({});
+    const [pipelineStateKeys, setPipelineStateKeys] = React.useState<
+      string[] | undefined
+    >([]);
     const [addComponentDialog, setAddComponentDialog] = React.useState(false);
     const [addComponent, setAddComponent] = React.useState<Component | null>(
       null,
     );
+    const pipelineStateClient = useComposerAxios<PipelineState>();
+
+    const fetchPipelineState = () => {
+      pipelineStateClient.sendRequest(getPipelineState(pipeline.id));
+    };
+
+    React.useEffect(() => {
+      fetchPipelineState();
+    }, []);
+
+    React.useEffect(() => {
+      if (!pipelineStateClient.response) {
+        return;
+      }
+
+      setPipelineState(pipelineStateClient.response.data.state);
+      setPipelineStateKeys(
+        Object.keys(pipelineStateClient.response.data.state),
+      );
+    }, [pipelineStateClient.response]);
 
     const addComponentSelectClient = useComposerAxios<Component>();
     const addComponentClient = useComposerAxios<
@@ -94,6 +128,11 @@ const InspectPipeline = React.forwardRef(
       );
     };
 
+    const handleChangeState = (v: JsonObject, k?: string[]) => {
+      setPipelineState(v);
+      setPipelineStateKeys(k);
+    };
+
     React.useEffect(() => {
       if (!addComponentClient.response) return;
 
@@ -114,10 +153,11 @@ const InspectPipeline = React.forwardRef(
 
     React.useImperativeHandle(
       ref,
-      () =>
-        ({
-          getPipelineName: () => pipelineName,
-        }) as InspectPipelineRef,
+      (): InspectPipelineRef => ({
+        getPipelineName: () => pipelineName,
+        getPipelineState: () => pipelineState,
+        onRun: fetchPipelineState,
+      }),
     );
 
     return (
@@ -136,6 +176,38 @@ const InspectPipeline = React.forwardRef(
           <Typography variant="body2">
             Created At: {new Date(pipeline.created_at).toLocaleString()}
           </Typography>
+          <Button
+            variant="outlined"
+            onClick={() => setPipelineStateOpened(!pipelineStateOpened)}
+            sx={{
+              width: '100%',
+              my: 1,
+              backgroundColor: pipelineStateOpened
+                ? alpha(
+                    theme.palette.primary.main,
+                    theme.palette.action.selectedOpacity,
+                  )
+                : undefined,
+            }}
+          >
+            State
+          </Button>
+          <Collapse
+            in={
+              pipelineStateOpened &&
+              Boolean(pipelineState) &&
+              Boolean(pipelineStateKeys)
+            }
+          >
+            <Box sx={{ overflowX: 'auto' }}>
+              <JsonEditor
+                value={pipelineState}
+                onChange={(v, k) => handleChangeState(v as JsonObject, k)}
+                objectKeys={pipelineStateKeys}
+                base
+              />
+            </Box>
+          </Collapse>
         </Box>
         <Divider sx={{ mx: 3 }} />
         {React.useMemo(

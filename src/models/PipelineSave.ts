@@ -14,6 +14,7 @@ export interface PipelineSaveComponentInstance {
 
 export interface PipelineSaveRequest {
   name: string;
+  state: JsonObject;
   components: PipelineSaveComponentInstance[];
 }
 
