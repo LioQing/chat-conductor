@@ -38,6 +38,7 @@
     "react": "^18.2.0",
     "react-cookie": "^6.1.1",
     "react-dom": "^18.2.0",
+    "react-py": "^1.10.6",
     "react-resizable-panels": "^0.0.55",
     "react-router-dom": "^6.17.0",
     "react-scripts": "5.0.1",
@@ -46,11 +47,11 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start WATCHPACK_POLLING=true",
-    "build": "react-scripts build",
+    "start": "react-app-rewired start WATCHPACK_POLLING=true",
+    "build": "react-app-rewired build",
     "pre-commit": "husky install",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "test": "react-app-rewired test",
+    "eject": "react-app-rewired eject"
   },
   "browserslist": {
     "production": [
@@ -73,7 +74,8 @@
     "eslint-config-prettier": "^9.0.0",
     "husky": "^8.0.3",
     "lint-staged": "^14.0.1",
-    "prettier": "3.0.3"
+    "prettier": "3.0.3",
+    "react-app-rewired": "^2.2.1"
   },
   "lint-staged": {
     "src/**/*.{js,jsx,ts,tsx}": "eslint --cache --fix",

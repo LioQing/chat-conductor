@@ -6,11 +6,13 @@ import SendIcon from '@mui/icons-material/Send';
 import InputAdornment from '@mui/material/InputAdornment';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
-import LayersClearIcon from '@mui/icons-material/LayersClear';
+import { usePython } from 'react-py';
 import Typography from '@mui/material/Typography';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import { alpha, useTheme } from '@mui/material';
+import { useCookies } from 'react-cookie';
+import chat from '../python/chat';
 import useComposerAxios from '../hooks/useComposerAxios';
 import {
   ChatHistory,
@@ -23,6 +25,7 @@ import { ChatSend, ChatSendRequest, postChatSend } from '../models/ChatSend';
 export interface ChatProps {
   pipeline: Pipeline;
   onPipelineRun: () => void;
+  runInBackend: boolean;
 }
 
 enum Role {
@@ -36,10 +39,11 @@ interface Message {
   content: string;
 }
 
-function Chat({ pipeline, onPipelineRun }: ChatProps) {
+function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
   const theme = useTheme();
+  const [cookies] = useCookies();
   const [inputMessage, setInputMessage] = React.useState('');
-  const [disabled, setDisabled] = React.useState(false);
+  const [disabled, setDisabled] = React.useState(true);
   const [messagesHeight, setMessagesHeight] = React.useState(0);
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [chatErrorOpened, setChatErrorOpened] = React.useState(false);
@@ -47,8 +51,9 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
   const messageRowRef = React.useRef<HTMLDivElement>(null);
   const messagesBottomRef = React.useRef<HTMLDivElement>(null);
 
+  // chat history
+
   const chatHistoryClient = useComposerAxios<ChatHistory[]>();
-  const chatSendClient = useComposerAxios<ChatSend, ChatSendRequest>();
 
   const fetchChatHistory = () => {
     chatHistoryClient.sendRequest(
@@ -114,6 +119,110 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
     fetchChatHistory();
   }, [pipeline]);
 
+  // run in backend
+
+  const chatSendClient = useComposerAxios<ChatSend, ChatSendRequest>();
+
+  React.useEffect(() => {
+    if (!chatSendClient.response) return;
+
+    fetchChatHistory();
+    setDisabled(false);
+  }, [chatSendClient.response]);
+
+  React.useEffect(() => {
+    if (!chatSendClient.error) return;
+
+    // Remove temp user message
+    setMessages(
+      messages.filter((message) => !message.id.startsWith('usertemp')),
+    );
+
+    setChatError(chatSendClient.error.toString());
+    setChatErrorOpened(true);
+    setDisabled(false);
+  }, [chatSendClient.error]);
+
+  // run in pyodide
+
+  const python = usePython();
+  const [stdoutLength, setStdoutLength] = React.useState(0);
+
+  // this should only be triggered twice (once on first render, second on load)
+  React.useEffect(() => {
+    if (python.isLoading) {
+      setDisabled(true);
+      return;
+    }
+
+    setDisabled(false);
+
+    // create file system from chat
+    const createFs = async (dirModule: object, dir: string = '.') => {
+      for (const [name, content] of Object.entries(dirModule)) {
+        if (typeof content === 'object') {
+          python.mkdir(`${dir}/${name}`);
+          createFs(content, `${dir}/${name}`);
+        } else if (typeof content === 'string') {
+          let text = content;
+          if (content.startsWith('# load=')) {
+            const url = content.slice(7);
+            const response = await fetch(url);
+            text = await response.text();
+          }
+
+          // convert python relative import to absolute import
+          const resolvedDir = dir.replace(/\//g, '.').slice(2);
+          if (dir === '.') {
+            // `from . import ...` -> `import ...`
+            text = text.replace(/from \. import /g, 'import ');
+
+            // `from .<module> import ...` -> `from <module> import ...`
+            text = text.replace(/from \.(\w+) import /g, 'from $1 import ');
+          } else {
+            // `from . import ...` -> `from <dir> import ...`
+            text = text.replace(
+              /from \. import /g,
+              `from ${resolvedDir} import `,
+            );
+
+            // `from .<module> import ...` -> `from <dir>.<module> import ...`
+            text = text.replace(
+              /from \.(\w+) import /g,
+              `from ${resolvedDir}.$1 import `,
+            );
+          }
+
+          python.writeFile(`${dir}/${name}.py`, text);
+          if (dir === '.') {
+            python.watchModules([`${name}`]);
+          } else {
+            python.watchModules([`${resolvedDir}.${name}`]);
+          }
+          console.log(`Created ${dir}/${name}.py`);
+        } else {
+          console.warn('Unknown module type');
+        }
+      }
+    };
+    createFs(chat);
+  }, [python.isLoading]);
+
+  React.useEffect(() => {
+    if (python.stderr === '') return;
+
+    console.error(python.stderr);
+    setChatError('Python Error');
+    setChatErrorOpened(true);
+  }, [python.stderr]);
+
+  React.useEffect(() => {
+    if (python.stdout === '') return;
+
+    console.log(python.stdout.slice(stdoutLength + 1));
+    setStdoutLength(python.stdout.length);
+  }, [python.stdout]);
+
   const handleInputMessage = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputMessage(e.target.value);
   };
@@ -140,35 +249,37 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
     setDisabled(true);
     setInputMessage('');
 
-    // Call API
-    chatSendClient.sendRequest(
-      postChatSend(pipeline.id, {
-        user_message: userMessage.content,
-      } as ChatSendRequest),
-    );
+    if (runInBackend) {
+      // Call API
+      chatSendClient.sendRequest(
+        postChatSend(pipeline.id, {
+          user_message: userMessage.content,
+        } as ChatSendRequest),
+      );
+    } else {
+      // Run with pyodide
+      (async () => {
+        // run python
+        await python.runPython(
+          chat.main_template
+            .replace(
+              /(os.environ\['REACT_APP_COMPOSER_BASE_URL'\] = )''/g,
+              `$1'${process.env.REACT_APP_COMPOSER_BASE_URL}'`,
+            )
+            .replace(
+              /(os.environ\['ACCESS_TOKEN'\] = )''/g,
+              `$1'${cookies['access-token']}'`,
+            )
+            .replace(/(pipeline_id=)0/g, `$1${pipeline.id}`)
+            .replace(/(user_message=)''/g, `$1'${userMessage.content}'`),
+        );
+
+        // done
+        fetchChatHistory();
+        setDisabled(false);
+      })();
+    }
   };
-
-  React.useEffect(() => {
-    if (!chatSendClient.response) return;
-
-    fetchChatHistory();
-    setDisabled(false);
-  }, [chatSendClient.response]);
-
-  React.useEffect(() => {
-    if (!chatSendClient.error) return;
-
-    // Remove temp user message
-    setMessages(
-      messages.filter((message) => !message.id.startsWith('usertemp')),
-    );
-
-    setChatError(chatSendClient.error.toString());
-    setChatErrorOpened(true);
-    setDisabled(false);
-  }, [chatSendClient.error]);
-
-  const handleClearHistory = () => {};
 
   React.useEffect(() => {
     messagesBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -186,18 +297,27 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
         value={inputMessage}
         onChange={handleInputMessage}
         onKeyDown={handleKeyMessage}
+        disabled={python.isLoading}
         placeholder="Enter your message"
         fullWidth
         endAdornment={
           <Box display="flex" flexDirection="row" justifyContent="flex-end">
             <InputAdornment position="end">
-              <Tooltip placement="top" title="Clear history">
-                <IconButton onClick={handleClearHistory}>
-                  <LayersClearIcon />
-                </IconButton>
-              </Tooltip>
-            </InputAdornment>
-            <InputAdornment position="end">
+              {python.isLoading && (
+                <Box
+                  px={1}
+                  py={0.25}
+                  sx={{
+                    border: 1,
+                    borderRadius: 8,
+                    borderColor: 'primary.main',
+                  }}
+                >
+                  <Typography variant="body2" color="primary.main">
+                    Loading Python...
+                  </Typography>
+                </Box>
+              )}
               <Tooltip
                 placement="top"
                 title={
@@ -235,7 +355,12 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
                   <IconButton
                     onClick={handleSend}
                     disabled={disabled}
-                    color={disabled ? undefined : 'primary'}
+                    sx={{
+                      color: disabled
+                        ? theme.palette.action.disabled
+                        : theme.palette.primary.main,
+                      transitions: theme.transitions.create('all'),
+                    }}
                   >
                     <SendIcon />
                   </IconButton>

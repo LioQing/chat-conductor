@@ -6,6 +6,7 @@ import {
   createRoutesFromElements,
   RouterProvider,
 } from 'react-router-dom';
+import { PythonProvider } from 'react-py';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { Settings as SettingsData, SettingsContext } from './contexts/Settings';
 import Pipeline from './pages/Pipeline';
@@ -18,6 +19,7 @@ import Scaffold from './components/Scaffold';
 import Index from './pages/Index';
 import useLocalStorage from './hooks/useLocalStorage';
 import Admin from './pages/Admin';
+import packages from './python/packages';
 
 const baseTheme = {
   shape: {
@@ -96,7 +98,9 @@ function App() {
       )}
     >
       <ThemeProvider theme={settings.darkMode ? darkTheme : lightTheme}>
-        <RouterProvider router={router} />
+        <PythonProvider packages={packages}>
+          <RouterProvider router={router} />
+        </PythonProvider>
       </ThemeProvider>
     </SettingsContext.Provider>
   );

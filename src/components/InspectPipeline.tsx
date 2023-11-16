@@ -172,6 +172,11 @@ const InspectPipeline = React.forwardRef(
             autoComplete="new-password" // https://learn.microsoft.com/en-us/answers/questions/974921/edge-bug-autocomplete-off-still-displays-previousl
             sx={{ my: 1 }}
           />
+          {pipeline.is_safe && (
+            <Typography variant="caption" display="block">
+              Safe Pipeline
+            </Typography>
+          )}
           <Typography variant="body2">Pipeline ID: {pipeline.id}</Typography>
           <Typography variant="body2">
             Created At: {new Date(pipeline.created_at).toLocaleString()}

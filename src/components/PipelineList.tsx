@@ -27,12 +27,14 @@ import {
   PipelineRenameRequest,
   putPipelineRename,
 } from '../models/PipelineRename';
+import useQuery from '../hooks/useQuery';
 
 export interface PipelineListProps {
   setPipeline: (pipeline: Pipeline | null) => void;
 }
 
 function PipelineList({ setPipeline }: PipelineListProps) {
+  const query = useQuery();
   const pipelinesClient = useComposerAxios<Pipeline[]>(getPipeline());
   const pipelineDeleteClient = useComposerAxios<Pipeline[]>();
   const pipelineRenameClient = useComposerAxios<
@@ -58,6 +60,19 @@ function PipelineList({ setPipeline }: PipelineListProps) {
     if (!pipelinesClient.response) return;
 
     setPipelines(pipelinesClient.response.data);
+
+    if (query.has('pipeline')) {
+      const pipelineIdParam = query.get('pipeline');
+      if (!pipelineIdParam) return;
+
+      const pipelineId = parseInt(pipelineIdParam, 10);
+      if (Number.isNaN(pipelineId)) return;
+
+      const pipeline = pipelines.find((p) => p.id === pipelineId);
+      if (!pipeline) return;
+
+      setPipeline(pipeline);
+    }
   }, [pipelinesClient.response]);
 
   const handleSelectPipeline = (pipeline: Pipeline) => {

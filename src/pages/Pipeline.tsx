@@ -8,6 +8,8 @@ import { alpha } from '@mui/material/styles';
 import Tooltip from '@mui/material/Tooltip';
 import TouchRipple from '@mui/material/ButtonBase/TouchRipple';
 import Divider from '@mui/material/Divider';
+import Checkbox from '@mui/material/Checkbox';
+import Typography from '@mui/material/Typography';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import {
   PanelGroup,
@@ -44,7 +46,9 @@ const unsaveMessage =
 
 function Pipeline() {
   const theme = useTheme();
+  const history = React.useMemo(() => window.history, []);
   const { height: containerHeight } = useContainerDimensions();
+  const [runInBackend, setRunInBackend] = React.useState(false);
   const [pipelineOpened, setPipelineOpened] = React.useState(false);
   const [pipeline, setPipeline] = React.useState<PipelineModel | null>(null);
   const [componentId, setComponentId] = React.useState<number | null>(null);
@@ -70,12 +74,14 @@ function Pipeline() {
       pipelineComponentInstanceClient.sendRequest(
         getComponentInstance(pipeline.id),
       );
+      history.pushState(null, '', `/pipeline/?pipeline=${pipeline.id}`);
     } else {
       setPipelineOpened(false);
       setMode(null);
       setComponentId(null);
       setComponents([]);
       setSaved(true);
+      history.pushState(null, '', `/pipeline/`);
     }
   }, [pipeline]);
 
@@ -251,6 +257,10 @@ function Pipeline() {
     // No need to unsave because this is only called when component is selected
   };
 
+  const handleSetRunInBackend = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRunInBackend(e.target.checked);
+  };
+
   useKey('ctrls', (e: KeyboardEvent) => {
     e.preventDefault();
     const rect = saveButtonRef.current?.getBoundingClientRect();
@@ -382,16 +392,41 @@ function Pipeline() {
           <Panel
             title="Chat"
             sx={{ height: editorHeight }}
+            trailing={
+              pipeline?.is_safe && (
+                <>
+                  <Checkbox
+                    size="small"
+                    color="primary"
+                    value={runInBackend}
+                    onChange={handleSetRunInBackend}
+                  />
+                  <Typography>Run in backend</Typography>
+                </>
+              )
+            }
             wrapper={
               <Box display="flex" flexDirection="column" height="100%" />
             }
           >
-            <Chat pipeline={pipeline!} onPipelineRun={handlePipelineRun} />
+            <Chat
+              pipeline={pipeline!}
+              onPipelineRun={handlePipelineRun}
+              runInBackend={runInBackend}
+            />
           </Panel>
         </ResizablePanel>
       </>
     ),
-    [pipelineOpened, pipeline, components, component, mode, editorHeight],
+    [
+      pipelineOpened,
+      pipeline,
+      components,
+      component,
+      mode,
+      editorHeight,
+      runInBackend,
+    ],
   );
 
   const pipelineListPanel = React.useMemo(
@@ -499,7 +534,15 @@ function Pipeline() {
               {pipelineListPanel}
             </Box>
           ),
-        [pipelineOpened, pipeline, components, component, mode, editorHeight],
+        [
+          pipelineOpened,
+          pipeline,
+          components,
+          component,
+          mode,
+          editorHeight,
+          runInBackend,
+        ],
       )}
     </Box>
   );
