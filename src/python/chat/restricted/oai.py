@@ -1,17 +1,60 @@
+import restricted
+import prelude
 import requests
-import os
 
-current_component = None
+_current_component: restricted.Component | None = None
 
-url = os.getenv("REACT_APP_COMPOSER_BASE_URL")
-function_paths = {
-    "chatcmpl": "/conductor/chat/oai/chatcmpl",
-    "chatcmpl_with_messages": "/conductor/chat/oai/chatcmpl_with_messages",
-    "chatcmpl_function": "/conductor/chat/oai/chatcmpl_function",
-}
 
-def post(function_name: str, data: dict):
-    """Send a POST request to the Composer API."""
-    path = function_paths[function_name]
-    response = requests.post(f"{url}/{path}/{current_component.id}", json=data)
+class _CurrentComponentHelper:
+    """Helper class for setting current component"""
+
+    def __init__(self, component: restricted.Component):
+        """Initialize the helper"""
+        self.component = component
+
+    def __enter__(self):
+        """Enter the context"""
+        global _current_component
+        _current_component = self.component
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Exit the context"""
+        global _current_component
+        _current_component = None
+
+
+def init_oai(
+    component: restricted.Component,
+) -> _CurrentComponentHelper:
+    """Set the current component"""
+    return _CurrentComponentHelper(component)
+
+
+def chatcmpl(data: dict):
+    """Call Chatmpl"""
+
+    response = requests.post(
+        f"{restricted.url}/oai/chatcmpl/{_current_component.id}/",
+        json={"request": data},
+        headers=prelude.headers,
+    )
+    response.raise_for_status()
     return response.json()
+
+
+def remove_recursively(item: any, *forbidden):
+    """Remove recursively all forbidden items from a list or a dict."""
+    if isinstance(item, list):
+        return [
+            remove_recursively(entry, *forbidden)
+            for entry in item
+            if entry not in forbidden
+        ]
+    if isinstance(item, dict):
+        result = {}
+        for key, value in item.items():
+            value = remove_recursively(value, *forbidden)
+            if key not in forbidden and value not in forbidden:
+                result[key] = value
+        return result
+    return item

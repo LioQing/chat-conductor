@@ -332,10 +332,60 @@ function Pipeline() {
     return 'Nothing is selected';
   }, [mode]);
 
+  const divider = React.useMemo(
+    () => (
+      <PanelResizeHandle>
+        <Box
+          p={0.5}
+          height="100%"
+          sx={{
+            '> *': {
+              backgroundColor: alpha(
+                theme.palette.divider,
+                theme.palette.action.focusOpacity,
+              ),
+            },
+            '&:hover': {
+              '> *': {
+                backgroundColor: alpha(
+                  theme.palette.divider,
+                  theme.palette.action.focusOpacity * 1.5,
+                ),
+              },
+            },
+            '&:active': {
+              '> *': {
+                backgroundColor: alpha(
+                  theme.palette.divider,
+                  theme.palette.action.disabledOpacity,
+                ),
+              },
+            },
+          }}
+        >
+          <Divider orientation="vertical" />
+        </Box>
+      </PanelResizeHandle>
+    ),
+    [theme],
+  );
+
+  const resizablePanelStyle = {
+    margin: -1,
+    padding: 1,
+    height: 'calc(100% + 16px)',
+    width: 'calc(100% + 16px)',
+  };
+
   const editorComponents = React.useMemo(
     () => (
       <>
-        <ResizablePanel id="editor" order={2} collapsible>
+        <ResizablePanel
+          id="editor"
+          order={2}
+          collapsible
+          style={resizablePanelStyle}
+        >
           <Panel
             title={editorTitle}
             titleSx={{ mx: 3 }}
@@ -356,39 +406,13 @@ function Pipeline() {
             />
           </Panel>
         </ResizablePanel>
-        <PanelResizeHandle>
-          <Box
-            p={0.5}
-            height="100%"
-            sx={{
-              '> *': {
-                backgroundColor: alpha(
-                  theme.palette.divider,
-                  theme.palette.action.focusOpacity,
-                ),
-              },
-              '&:hover': {
-                '> *': {
-                  backgroundColor: alpha(
-                    theme.palette.divider,
-                    theme.palette.action.focusOpacity * 1.5,
-                  ),
-                },
-              },
-              '&:active': {
-                '> *': {
-                  backgroundColor: alpha(
-                    theme.palette.divider,
-                    theme.palette.action.disabledOpacity,
-                  ),
-                },
-              },
-            }}
-          >
-            <Divider orientation="vertical" />
-          </Box>
-        </PanelResizeHandle>
-        <ResizablePanel id="chat" order={3} collapsible>
+        {divider}
+        <ResizablePanel
+          id="chat"
+          order={3}
+          collapsible
+          style={resizablePanelStyle}
+        >
           <Panel
             title="Chat"
             sx={{ height: editorHeight }}
@@ -485,42 +509,20 @@ function Pipeline() {
       {React.useMemo(
         () =>
           pipelineOpened && pipeline ? (
-            <PanelGroup direction="horizontal" autoSaveId="editor-panel-group">
-              <ResizablePanel id="pipeline-list" order={1} collapsible>
+            <PanelGroup
+              direction="horizontal"
+              autoSaveId="editor-panel-group"
+              style={{ overflow: 'visible' }}
+            >
+              <ResizablePanel
+                id="pipeline-list"
+                order={1}
+                collapsible
+                style={resizablePanelStyle}
+              >
                 {pipelineListPanel}
               </ResizablePanel>
-              <PanelResizeHandle>
-                <Box
-                  p={0.5}
-                  height="100%"
-                  sx={{
-                    '> *': {
-                      backgroundColor: alpha(
-                        theme.palette.divider,
-                        theme.palette.action.focusOpacity,
-                      ),
-                    },
-                    '&:hover': {
-                      '> *': {
-                        backgroundColor: alpha(
-                          theme.palette.divider,
-                          theme.palette.action.focusOpacity * 1.5,
-                        ),
-                      },
-                    },
-                    '&:active': {
-                      '> *': {
-                        backgroundColor: alpha(
-                          theme.palette.divider,
-                          theme.palette.action.disabledOpacity,
-                        ),
-                      },
-                    },
-                  }}
-                >
-                  <Divider orientation="vertical" />
-                </Box>
-              </PanelResizeHandle>
+              {divider}
               {editorComponents}
             </PanelGroup>
           ) : (

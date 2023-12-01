@@ -193,6 +193,19 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
             );
           }
 
+          // prelude processing
+          if (name === 'prelude') {
+            text = text
+              .replace(
+                /(os.environ\["REACT_APP_COMPOSER_BASE_URL"\] = )""/g,
+                `$1'${process.env.REACT_APP_COMPOSER_BASE_URL}'`,
+              )
+              .replace(
+                /(os.environ\["ACCESS_TOKEN"\] = )""/g,
+                `$1'${cookies['access-token']}'`,
+              );
+          }
+
           python.writeFile(`${dir}/${name}.py`, text);
           if (dir === '.') {
             python.watchModules([`${name}`]);
@@ -219,7 +232,13 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
   React.useEffect(() => {
     if (python.stdout === '') return;
 
-    console.log(python.stdout.slice(stdoutLength + 1));
+    const output =
+      stdoutLength === 0
+        ? python.stdout
+        : python.stdout.slice(stdoutLength + 1);
+    if (output.length > 0) {
+      console.log(output);
+    }
     setStdoutLength(python.stdout.length);
   }, [python.stdout]);
 
@@ -262,16 +281,8 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
         // run python
         await python.runPython(
           chat.main_template
-            .replace(
-              /(os.environ\['REACT_APP_COMPOSER_BASE_URL'\] = )''/g,
-              `$1'${process.env.REACT_APP_COMPOSER_BASE_URL}'`,
-            )
-            .replace(
-              /(os.environ\['ACCESS_TOKEN'\] = )''/g,
-              `$1'${cookies['access-token']}'`,
-            )
             .replace(/(pipeline_id=)0/g, `$1${pipeline.id}`)
-            .replace(/(user_message=)''/g, `$1'${userMessage.content}'`),
+            .replace(/(user_message=)""/g, `$1'${userMessage.content}'`),
         );
 
         // done
@@ -388,47 +399,44 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
         >
           <Box
             display="flex"
-            flexDirection="column"
+            flexDirection="column-reverse"
             justifyContent="flex-end"
             p={1}
             gap={1}
           >
-            {messages
-              .slice(0)
-              .reverse()
-              .map((message: Message, i: number) => (
-                <Box
-                  key={i}
-                  display="flex"
-                  flexDirection="row"
-                  justifyContent={
-                    message.role === Role.User ? 'flex-end' : 'flex-start'
-                  }
+            <Box position="relative" ref={messagesBottomRef} />
+            {messages.map((message: Message, i: number) => (
+              <Box
+                key={i}
+                display="flex"
+                flexDirection="row"
+                justifyContent={
+                  message.role === Role.User ? 'flex-end' : 'flex-start'
+                }
+              >
+                <Paper
+                  sx={{
+                    p: 1,
+                    maxWidth: 'calc(100% - 16px)',
+                    backgroundColor:
+                      message.role === Role.User ? 'primary.main' : undefined,
+                    color:
+                      message.role === Role.User
+                        ? 'primary.contrastText'
+                        : 'patlette.text.primary',
+                    overflowWrap: 'break-word',
+                  }}
                 >
-                  <Paper
-                    sx={{
-                      p: 1,
-                      maxWidth: 'calc(100% - 16px)',
-                      backgroundColor:
-                        message.role === Role.User ? 'primary.main' : undefined,
-                      color:
-                        message.role === Role.User
-                          ? 'primary.contrastText'
-                          : 'patlette.text.primary',
-                      overflowWrap: 'break-word',
-                    }}
+                  <Typography
+                    variant="body2"
+                    color="inherit"
+                    sx={{ whiteSpace: 'pre-line' }}
                   >
-                    <Typography
-                      variant="body2"
-                      color="inherit"
-                      sx={{ whiteSpace: 'pre-line' }}
-                    >
-                      {message.content}
-                    </Typography>
-                  </Paper>
-                </Box>
-              ))}
-            <Box position="relative" top="100%" ref={messagesBottomRef} />
+                    {message.content}
+                  </Typography>
+                </Paper>
+              </Box>
+            ))}
           </Box>
         </Box>
         {messageRow}

@@ -173,7 +173,7 @@ const InspectPipeline = React.forwardRef(
             sx={{ my: 1 }}
           />
           {pipeline.is_safe && (
-            <Typography variant="caption" display="block">
+            <Typography variant="caption" display="block" color="primary">
               Safe Pipeline
             </Typography>
           )}

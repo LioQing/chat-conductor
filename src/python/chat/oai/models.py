@@ -3,6 +3,8 @@
 Modified from engine.oai.models in Chat Composer to adapt to v1.10
 """
 
+import json
+
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -23,7 +25,7 @@ class FunctionCall(BaseModel):
 
     def model_dump(self) -> Dict[str, Any]:
         """Dump the model"""
-        return self.json()
+        return json.loads(self.json())
 
 
 class Message(BaseModel):
@@ -70,7 +72,7 @@ class Choice(BaseModel):
 
     def model_dump(self) -> Dict[str, Any]:
         """Dump the model"""
-        return self.json()
+        return json.loads(self.json())
 
 
 class Usage(BaseModel):
@@ -88,7 +90,7 @@ class Usage(BaseModel):
 
     def model_dump(self) -> Dict[str, Any]:
         """Dump the model"""
-        return self.json()
+        return json.loads(self.json())
 
 
 class Chatcmpl(BaseModel):
@@ -111,7 +113,7 @@ class Chatcmpl(BaseModel):
 
     def model_dump(self) -> Dict[str, Any]:
         """Dump the model"""
-        return self.json()
+        return json.loads(self.json())
 
 
 class FunctionCallRequest(BaseModel):
@@ -200,16 +202,17 @@ class Function(BaseModel):
 
     def model_dump(self) -> Dict[str, Any]:
         """Dump the model"""
-        return self.json()
+        return json.loads(self.json())
 
 
 class ChatcmplRequest(BaseModel):
     """Chat completion request body.
 
     Attributes:
-        deployment_id (str): The deployment ID.
+        deployment_id (Optional[str]): The deployment ID. Defaults to config
+            in backend.
+        model (Optional[str]): The model. Defaults to config in backend.
         messages (List[Message]): The messages.
-        model (str): The model.
         frequency_penalty (float): The frequency penalty.
         function_call (FunctionCallRequest): The function call.
         functions (Optional[List[Function]]): The functions. Defaults to None.
@@ -223,9 +226,9 @@ class ChatcmplRequest(BaseModel):
         user (Optional[str]): The user. Defaults to None.
     """
 
-    deployment_id: str
+    deployment_id: Optional[str] = Field(None)
+    model: Optional[str] = Field(None)
     messages: List[Message]
-    model: str
     frequency_penalty: float = Field(0.0, ge=-2.0, le=2.0)
     function_call: FunctionCallRequest = Field(
         default_factory=FunctionCallRequest
@@ -242,7 +245,7 @@ class ChatcmplRequest(BaseModel):
 
     def model_dump(self) -> Dict[str, Any]:
         """Dump the model"""
-        dump = self.json()
+        dump = json.loads(self.json())
 
         if self.functions is None:
             dump.pop("functions")
