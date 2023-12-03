@@ -10,8 +10,10 @@ import { usePython } from 'react-py';
 import Typography from '@mui/material/Typography';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
 import { alpha, useTheme } from '@mui/material';
 import { useCookies } from 'react-cookie';
+import InfiniteScroll from 'react-infinite-scroll-component';
 import chat from '../python/chat';
 import useComposerAxios from '../hooks/useComposerAxios';
 import {
@@ -21,6 +23,11 @@ import {
 } from '../models/ChatHistory';
 import { Pipeline } from '../models/Pipeline';
 import { ChatSend, ChatSendRequest, postChatSend } from '../models/ChatSend';
+import usePrevious from '../hooks/usePrevious';
+
+const pageSize = 5;
+const messageRowPadding = 16;
+const messageRowMaxRows = 3;
 
 export interface ChatProps {
   pipeline: Pipeline;
@@ -44,33 +51,35 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
   const [cookies] = useCookies();
   const [inputMessage, setInputMessage] = React.useState('');
   const [disabled, setDisabled] = React.useState(true);
-  const [messagesHeight, setMessagesHeight] = React.useState(0);
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [chatErrorOpened, setChatErrorOpened] = React.useState(false);
   const [chatError, setChatError] = React.useState<string | null>(null);
-  const messageRowRef = React.useRef<HTMLDivElement>(null);
+  const prevMessages = usePrevious(messages);
   const messagesBottomRef = React.useRef<HTMLDivElement>(null);
+  const messageRowRef = React.useRef<HTMLTextAreaElement | HTMLInputElement>(
+    null,
+  );
 
-  // chat history
+  // first chat page
 
-  const chatHistoryClient = useComposerAxios<ChatHistory[]>();
+  const firstChatPageClient = useComposerAxios<ChatHistory[]>();
 
-  const fetchChatHistory = () => {
-    chatHistoryClient.sendRequest(
+  const fetchFirstChatPage = () => {
+    firstChatPageClient.sendRequest(
       getChatHistory(pipeline.id, {
         page: 1,
-        page_size: 20,
+        page_size: pageSize,
       } as ChatHistoryParams),
     );
   };
 
   React.useEffect(() => {
-    if (!chatHistoryClient.response) return;
+    if (!firstChatPageClient.response) return;
 
     // replace messages if it is empty
     if (messages.length === 0) {
       setMessages(
-        chatHistoryClient.response.data.flatMap((chatHistory) => [
+        firstChatPageClient.response.data.flatMap((chatHistory) => [
           {
             id: `assi${chatHistory.id}`,
             role: Role.Assistant,
@@ -89,10 +98,10 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
     // else remove any "tempuser" message and then append new messages not in messages
     const firstNonTempId =
       messages.find((message) => !message.id.startsWith('usertemp'))?.id ?? '';
-    const firstAppearedIndex = chatHistoryClient.response.data.findIndex(
+    const firstAppearedIndex = firstChatPageClient.response.data.findIndex(
       (chatHistory) => `assi${chatHistory.id}` === firstNonTempId,
     );
-    const newMessages = chatHistoryClient.response.data
+    const newMessages = firstChatPageClient.response.data
       .slice(0, firstAppearedIndex)
       .flatMap((chatHistory) => [
         {
@@ -113,11 +122,77 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
     ]);
 
     onPipelineRun();
-  }, [chatHistoryClient.response]);
+  }, [firstChatPageClient.response]);
 
   React.useEffect(() => {
-    fetchChatHistory();
+    fetchFirstChatPage();
   }, [pipeline]);
+
+  // more chat page
+
+  const moreChatPageClient = useComposerAxios<ChatHistory[]>();
+  const [hasMore, setHasMore] = React.useState(true);
+
+  // if it is fetching the first page, then fetch after it is done
+  const [fetchAfterFirstPage, setFetchAfterFirstPage] = React.useState(false);
+
+  const fetchMoreChatPage = () => {
+    if (firstChatPageClient.loading) {
+      setFetchAfterFirstPage(true);
+      return;
+    }
+
+    if (moreChatPageClient.loading) {
+      return;
+    }
+
+    moreChatPageClient.sendRequest(
+      getChatHistory(pipeline.id, {
+        page: Math.floor(messages.length / pageSize / 2) + 1,
+        page_size: pageSize,
+      } as ChatHistoryParams),
+    );
+  };
+
+  React.useEffect(() => {
+    if (!moreChatPageClient.response) return;
+
+    if (moreChatPageClient.response.data.length === 0) {
+      setHasMore(false);
+      return;
+    }
+
+    // do not push duplicated messages
+    const lastMessageId = messages[messages.length - 1].id;
+    const lastDupIndex = moreChatPageClient.response.data.findLastIndex(
+      (chatHistory: ChatHistory) => `assi${chatHistory.id}` === lastMessageId,
+    );
+
+    setMessages([
+      ...messages,
+      ...moreChatPageClient.response.data
+        .slice(lastDupIndex + 1)
+        .flatMap((chatHistory) => [
+          {
+            id: `assi${chatHistory.id}`,
+            role: Role.Assistant,
+            content: chatHistory.api_message,
+          },
+          {
+            id: `user${chatHistory.id}`,
+            role: Role.User,
+            content: chatHistory.user_message,
+          },
+        ]),
+    ]);
+  }, [moreChatPageClient.response]);
+
+  React.useEffect(() => {
+    if (!fetchAfterFirstPage || firstChatPageClient.loading) return;
+
+    setFetchAfterFirstPage(false);
+    fetchMoreChatPage();
+  }, [firstChatPageClient]);
 
   // run in backend
 
@@ -126,7 +201,7 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
   React.useEffect(() => {
     if (!chatSendClient.response) return;
 
-    fetchChatHistory();
+    fetchFirstChatPage();
     setDisabled(false);
   }, [chatSendClient.response]);
 
@@ -246,9 +321,59 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
     setInputMessage(e.target.value);
   };
 
-  const handleKeyMessage = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !disabled) {
+  const handleInputMessageHeight = () => {
+    if (!messageRowRef.current) return;
+
+    const target = messageRowRef.current as
+      | HTMLTextAreaElement
+      | HTMLInputElement;
+
+    // reset height
+    target.style.height = '1px';
+
+    // get heights and rows
+    const heightWithoutPaddings = target.scrollHeight - messageRowPadding * 2;
+    const lineHeight = parseInt(
+      window.getComputedStyle(target).lineHeight.slice(0, -2),
+      10,
+    );
+    const rows = heightWithoutPaddings / lineHeight;
+
+    // max rows
+    if (rows <= messageRowMaxRows) {
+      target.style.height = `${heightWithoutPaddings}px`;
+    } else {
+      target.style.height = `${lineHeight * messageRowMaxRows}px`;
+    }
+  };
+
+  React.useEffect(() => {
+    handleInputMessageHeight();
+  }, [inputMessage, python.isLoading]);
+
+  const handleKeyMessage = (
+    e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>,
+  ) => {
+    if (e.key === 'Enter' && !disabled && !e.shiftKey) {
+      e.preventDefault();
       handleSend();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const target = e.target as HTMLTextAreaElement;
+      const { value } = target;
+
+      const cursorPosition = target.selectionStart;
+      const cursorEndPosition = target.selectionEnd;
+      const tab = '\t';
+
+      target.value =
+        value.substring(0, cursorPosition) +
+        tab +
+        value.substring(cursorEndPosition);
+
+      target.selectionStart = cursorPosition + 1;
+      target.selectionEnd = cursorPosition + 1;
+      setInputMessage(target.value);
     }
   };
 
@@ -282,28 +407,33 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
         await python.runPython(
           chat.main_template
             .replace(/(pipeline_id=)0/g, `$1${pipeline.id}`)
-            .replace(/(user_message=)""/g, `$1'${userMessage.content}'`),
+            .replace(
+              /(user_message=)""/g,
+              `$1"""${userMessage.content.replace('"', '\\"')}"""`,
+            ),
         );
 
         // done
-        fetchChatHistory();
+        fetchFirstChatPage();
         setDisabled(false);
       })();
     }
   };
 
   React.useEffect(() => {
+    // skip if the update is the new message
+    if (
+      prevMessages?.at(0)?.id.startsWith('usertemp') ||
+      prevMessages?.at(0)?.id === messages.at(0)?.id
+    ) {
+      return;
+    }
+
     messagesBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  React.useLayoutEffect(() => {
-    if (messageRowRef.current) {
-      setMessagesHeight(messageRowRef.current.offsetHeight);
-    }
-  }, [messages]);
-
   const messageRow = (
-    <Box ref={messageRowRef} display="flex" flexDirection="row">
+    <Box display="flex" flexDirection="row">
       <OutlinedInput
         value={inputMessage}
         onChange={handleInputMessage}
@@ -311,6 +441,16 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
         disabled={python.isLoading}
         placeholder="Enter your message"
         fullWidth
+        inputComponent="textarea"
+        inputProps={{
+          ref: messageRowRef,
+          style: {
+            resize: 'none',
+            minHeight: `1em`,
+            padding: `${messageRowPadding}px`,
+            scrollPadding: `${messageRowPadding}px`,
+          },
+        }}
         endAdornment={
           <Box display="flex" flexDirection="row" justifyContent="flex-end">
             <InputAdornment position="end">
@@ -324,7 +464,7 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
                     borderColor: 'primary.main',
                   }}
                 >
-                  <Typography variant="body2" color="primary.main">
+                  <Typography variant="caption" color="primary.main">
                     Loading Python...
                   </Typography>
                 </Box>
@@ -394,17 +534,36 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
         gap={1}
       >
         <Box
-          height={`calc(100% - ${messagesHeight}px - 8px)`}
+          id="messages"
+          display="flex"
+          flexDirection="column-reverse"
           sx={{ overflowY: 'scroll' }}
         >
-          <Box
-            display="flex"
-            flexDirection="column-reverse"
-            justifyContent="flex-end"
-            p={1}
-            gap={1}
+          <Box position="relative" ref={messagesBottomRef} />
+          <InfiniteScroll
+            dataLength={messages.length}
+            next={fetchMoreChatPage}
+            hasMore={hasMore}
+            loader={
+              <Box
+                display="flex"
+                flexDirection="row"
+                justifyContent="center"
+                alignItems="center"
+                height="100%"
+              >
+                <CircularProgress />
+              </Box>
+            }
+            scrollableTarget="messages"
+            inverse
+            style={{
+              display: 'flex',
+              flexDirection: 'column-reverse',
+              padding: '8px',
+              gap: '8px',
+            }}
           >
-            <Box position="relative" ref={messagesBottomRef} />
             {messages.map((message: Message, i: number) => (
               <Box
                 key={i}
@@ -437,7 +596,7 @@ function Chat({ pipeline, onPipelineRun, runInBackend }: ChatProps) {
                 </Paper>
               </Box>
             ))}
-          </Box>
+          </InfiniteScroll>
         </Box>
         {messageRow}
       </Box>
