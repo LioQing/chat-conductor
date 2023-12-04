@@ -20,11 +20,6 @@ import {
   AdminMakeTemplateRequest,
   patchAdminMakeTemplate,
 } from '../models/AdminMakeTemplate';
-import {
-  AdminMakeSafe,
-  AdminMakeSafeRequest,
-  patchAdminMakeSafe,
-} from '../models/AdminMakeSafe';
 
 function Admin() {
   const [usernameError, setUsernameError] = React.useState<string | null>(null);
@@ -34,7 +29,6 @@ function Admin() {
     null,
   );
   const [idError, setIdError] = React.useState<string | null>(null);
-  const [safeError, setSafeError] = React.useState<string | null>(null);
   const [createUserPassword, setCreateUserPassword] = React.useState<
     string | null
   >(null);
@@ -44,10 +38,6 @@ function Admin() {
   const [templateComponentId, setTemplateComponentId] = React.useState<
     number | null
   >(null);
-  const [makeSafeSuccessful, setMakeSafeSuccessful] = React.useState(false);
-  const [safePipelineId, setSafePipelineId] = React.useState<number | null>(
-    null,
-  );
 
   const createUserClient = useComposerAxios<
     AdminCreateUser,
@@ -60,10 +50,6 @@ function Admin() {
   const makeTemplateClient = useComposerAxios<
     AdminMakeTemplate,
     AdminMakeTemplateRequest
-  >();
-  const makeSafeClient = useComposerAxios<
-    AdminMakeSafe,
-    AdminMakeSafeRequest
   >();
 
   const handleCreateUserSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -224,45 +210,6 @@ function Admin() {
     setIdError(makeTemplateClient.error.message);
   }, [makeTemplateClient.error]);
 
-  const handleMakeSafeSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-
-    // validation
-    setSafeError(null);
-
-    if (!data.get('id')) {
-      setSafeError('This field may not be blank');
-      return;
-    }
-
-    setSafePipelineId(Number(data.get('id')));
-
-    makeSafeClient.sendRequest(
-      patchAdminMakeSafe(Number(data.get('id')), {
-        is_safe: (event.nativeEvent as any).submitter.name === 'make',
-      } as AdminMakeSafeRequest),
-    );
-  };
-
-  React.useEffect(() => {
-    if (!makeSafeClient.response) {
-      return;
-    }
-
-    if (makeSafeClient.response.status === 200) {
-      setMakeSafeSuccessful(true);
-    }
-  }, [makeSafeClient.response]);
-
-  React.useEffect(() => {
-    if (!makeSafeClient.error) {
-      return;
-    }
-
-    setSafeError(makeSafeClient.error.message);
-  }, [makeSafeClient.error]);
-
   return (
     <Box display="flex" flexDirection="column" gap={2} width="100%">
       <Panel title="Create New User">
@@ -402,52 +349,6 @@ function Admin() {
             </Typography>
             <Typography variant="body1">
               Component ID: {templateComponentId}
-            </Typography>
-          </Box>
-        )}
-      </Panel>
-      <Panel title="Set Pipeline as Safe">
-        <Box component="form" onSubmit={handleMakeSafeSubmit}>
-          <TextField
-            margin="normal"
-            fullWidth
-            id="id"
-            label="Pipeline ID"
-            name="id"
-            type="number"
-            autoComplete="new-password"
-            error={!!safeError}
-            helperText={safeError}
-          />
-          <Box display="flex" flexDirection="row" gap={1}>
-            <Button
-              type="submit"
-              name="make"
-              variant="contained"
-              sx={{ mt: 2 }}
-            >
-              Make Safe
-            </Button>
-            <Button
-              type="submit"
-              name="undo"
-              variant="contained"
-              sx={{ mt: 2 }}
-            >
-              Make Unsafe
-            </Button>
-          </Box>
-        </Box>
-        {makeSafeSuccessful && (
-          <Box mt={2} ml={1}>
-            <Typography variant="h6">
-              Successfully{' '}
-              {makeSafeClient.response?.data.is_safe
-                ? 'Made Safe'
-                : 'Made Unsafe'}
-            </Typography>
-            <Typography variant="body1">
-              Pipeline ID: {safePipelineId}
             </Typography>
           </Box>
         )}
