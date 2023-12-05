@@ -22,7 +22,7 @@ import { Pipeline } from '../models/Pipeline';
 import { ChatSend, ChatSendRequest, postChatSend } from '../models/ChatSend';
 import usePrevious from '../hooks/usePrevious';
 
-const pageSize = 5;
+const pageSize = 25;
 const messageRowPadding = 16;
 const messageRowMaxRows = 3;
 

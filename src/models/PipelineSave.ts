@@ -5,8 +5,10 @@ export interface PipelineSaveComponentInstance {
   id: number;
   is_enabled: boolean;
   order: number;
-  name: string;
   function_name: string;
+  name: string;
+  arguments: JsonObject;
+  return_type: string;
   description: JsonObject;
   code: string;
   state: JsonObject;
@@ -15,6 +17,7 @@ export interface PipelineSaveComponentInstance {
 export interface PipelineSaveRequest {
   name: string;
   state: JsonObject;
+  description: JsonObject;
   components: PipelineSaveComponentInstance[];
 }
 

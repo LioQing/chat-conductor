@@ -8,12 +8,9 @@ import Tooltip from '@mui/material/Tooltip';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import Dialog from '@mui/material/Dialog';
 import Button from '@mui/material/Button';
-import Collapse from '@mui/material/Collapse';
 import DialogActions from '@mui/material/DialogActions';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
-import useTheme from '@mui/material/styles/useTheme';
-import { alpha } from '@mui/material/styles';
 import ComponentList from './ComponentList';
 import { Pipeline } from '../models/Pipeline';
 import { ComponentInstance } from '../models/ComponentInstance';
@@ -26,23 +23,26 @@ import {
   ComponentInstanceNewRequest,
   postComponentInstanceNew,
 } from '../models/ComponentInstanceNew';
-import { JsonObject } from '../utils/JsonObject';
-import { PipelineState, getPipelineState } from '../models/PipelineState';
-import JsonEditor from './JsonEditor';
+import {
+  PipelineAttributes,
+  getPipelineAttributes,
+} from '../models/PipelineAttributes';
 
 export interface InspectPipelineRef {
   getPipelineName: () => string;
-  getPipelineState: () => JsonObject | null;
+  getPipelineAttributes: () => PipelineAttributes | null;
   onRun: () => void;
 }
 
 export interface InspectPipelineProps {
   pipeline: Pipeline;
+  pipelineAttributes: PipelineAttributes | null;
+  setPipelineAttributes: (state: PipelineAttributes | null) => void;
   components: ComponentInstance[];
   setComponents: (components: ComponentInstance[]) => void;
   component: ComponentInstance | null;
   setComponent: (component: ComponentInstance | null) => void;
-  setMode: (mode: 'code' | 'attr' | null) => void;
+  setOpened: (value: boolean) => void;
   onUnsave: () => void;
 }
 
@@ -50,46 +50,39 @@ const InspectPipeline = React.forwardRef(
   (
     {
       pipeline,
+      pipelineAttributes,
+      setPipelineAttributes,
       components,
       setComponents,
       component,
       setComponent,
-      setMode,
+      setOpened,
       onUnsave,
     }: InspectPipelineProps,
     ref,
   ) => {
-    const theme = useTheme();
     const [pipelineName, setPipelineName] = React.useState(pipeline.name);
-    const [pipelineStateOpened, setPipelineStateOpened] = React.useState(false);
-    const [pipelineState, setPipelineState] = React.useState<JsonObject>({});
-    const [pipelineStateKeys, setPipelineStateKeys] = React.useState<
-      string[] | undefined
-    >([]);
     const [addComponentDialog, setAddComponentDialog] = React.useState(false);
     const [addComponent, setAddComponent] = React.useState<Component | null>(
       null,
     );
-    const pipelineStateClient = useComposerAxios<PipelineState>();
+    const pipelineAttributesClient = useComposerAxios<PipelineAttributes>();
 
-    const fetchPipelineState = () => {
-      pipelineStateClient.sendRequest(getPipelineState(pipeline.id));
+    const fetchPipelineAttributes = () => {
+      pipelineAttributesClient.sendRequest(getPipelineAttributes(pipeline.id));
     };
 
     React.useEffect(() => {
-      fetchPipelineState();
+      fetchPipelineAttributes();
     }, []);
 
     React.useEffect(() => {
-      if (!pipelineStateClient.response) {
+      if (!pipelineAttributesClient.response) {
         return;
       }
 
-      setPipelineState(pipelineStateClient.response.data.state);
-      setPipelineStateKeys(
-        Object.keys(pipelineStateClient.response.data.state),
-      );
-    }, [pipelineStateClient.response]);
+      setPipelineAttributes(pipelineAttributesClient.response.data);
+    }, [pipelineAttributesClient.response]);
 
     const addComponentSelectClient = useComposerAxios<Component>();
     const addComponentClient = useComposerAxios<
@@ -128,16 +121,11 @@ const InspectPipeline = React.forwardRef(
       );
     };
 
-    const handleChangeState = (v: JsonObject, k?: string[]) => {
-      setPipelineState(v);
-      setPipelineStateKeys(k);
-    };
-
     React.useEffect(() => {
       if (!addComponentClient.response) return;
 
       setComponent(addComponentClient.response.data);
-      setMode('attr');
+      setOpened(true);
       setComponents([...components, addComponentClient.response.data]);
     }, [addComponentClient.response]);
 
@@ -155,8 +143,8 @@ const InspectPipeline = React.forwardRef(
       ref,
       (): InspectPipelineRef => ({
         getPipelineName: () => pipelineName,
-        getPipelineState: () => pipelineState,
-        onRun: fetchPipelineState,
+        getPipelineAttributes: () => pipelineAttributes,
+        onRun: fetchPipelineAttributes,
       }),
     );
 
@@ -172,47 +160,20 @@ const InspectPipeline = React.forwardRef(
             autoComplete="new-password" // https://learn.microsoft.com/en-us/answers/questions/974921/edge-bug-autocomplete-off-still-displays-previousl
             sx={{ my: 1 }}
           />
-          {pipeline.is_safe && (
-            <Typography variant="caption" display="block" color="primary">
-              Safe Pipeline
-            </Typography>
-          )}
           <Typography variant="body2">Pipeline ID: {pipeline.id}</Typography>
           <Typography variant="body2">
             Created At: {new Date(pipeline.created_at).toLocaleString()}
           </Typography>
           <Button
             variant="outlined"
-            onClick={() => setPipelineStateOpened(!pipelineStateOpened)}
+            onClick={() => setOpened(false)}
             sx={{
               width: '100%',
               my: 1,
-              backgroundColor: pipelineStateOpened
-                ? alpha(
-                    theme.palette.primary.main,
-                    theme.palette.action.selectedOpacity,
-                  )
-                : undefined,
             }}
           >
-            State
+            Attributes
           </Button>
-          <Collapse
-            in={
-              pipelineStateOpened &&
-              Boolean(pipelineState) &&
-              Boolean(pipelineStateKeys)
-            }
-          >
-            <Box sx={{ overflowX: 'auto' }}>
-              <JsonEditor
-                value={pipelineState}
-                onChange={(v, k) => handleChangeState(v as JsonObject, k)}
-                objectKeys={pipelineStateKeys}
-                base
-              />
-            </Box>
-          </Collapse>
         </Box>
         <Divider sx={{ mx: 3 }} />
         {React.useMemo(
@@ -238,7 +199,7 @@ const InspectPipeline = React.forwardRef(
                   setComponents={setComponents}
                   component={component}
                   setComponent={setComponent}
-                  setMode={setMode}
+                  setOpened={setOpened}
                 />
               </Box>
             </Box>

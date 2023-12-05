@@ -38,6 +38,7 @@ import {
   PipelineSaveRequest,
   patchPipelineSave,
 } from '../models/PipelineSave';
+import { PipelineAttributes } from '../models/PipelineAttributes';
 
 const unsaveMessage =
   'You have unsaved changes. Are you sure you want to leave?';
@@ -48,9 +49,11 @@ function Pipeline() {
   const { height: containerHeight } = useContainerDimensions();
   const [pipelineOpened, setPipelineOpened] = React.useState(false);
   const [pipeline, setPipeline] = React.useState<PipelineModel | null>(null);
+  const [pipelineAttributes, setPipelineAttributes] =
+    React.useState<PipelineAttributes | null>(null);
   const [componentId, setComponentId] = React.useState<number | null>(null);
   const [components, setComponents] = React.useState<ComponentInstance[]>([]);
-  const [mode, setMode] = React.useState<'code' | 'attr' | null>(null);
+  const [opened, setOpened] = React.useState<boolean>(false);
   const [editorHeight, setEditorHeight] = React.useState(0);
   const [saved, setSaved] = React.useState(true);
 
@@ -74,7 +77,7 @@ function Pipeline() {
       history.pushState(null, '', `/pipeline/?pipeline=${pipeline.id}`);
     } else {
       setPipelineOpened(false);
-      setMode(null);
+      setOpened(false);
       setComponentId(null);
       setComponents([]);
       setSaved(true);
@@ -139,22 +142,26 @@ function Pipeline() {
     pipelineEditorRef.current.setIsSaving(true);
     const newComps = updateComponentsFromEditor();
 
-    const pstate = inspectPipelineRef.current.getPipelineState();
-    if (pstate === null) {
-      console.error('Pipeline state is null');
+    const pipelineAttributes =
+      inspectPipelineRef.current.getPipelineAttributes();
+    if (pipelineAttributes === null) {
+      console.error('Pipeline attributes is null');
       return;
     }
 
     const pipelineSaveRequest: PipelineSaveRequest = {
       name: inspectPipelineRef.current.getPipelineName(),
-      state: pstate,
+      state: pipelineAttributes.state,
+      description: pipelineAttributes.description,
       components: newComps.map(
         (c: ComponentInstance): PipelineSaveComponentInstance => ({
           id: c.id,
           order: c.order,
           is_enabled: c.is_enabled,
-          name: c.name,
           function_name: c.function_name,
+          name: c.name,
+          arguments: c.arguments,
+          return_type: c.return_type,
           description: c.description,
           code: c.code,
           state: c.state,
@@ -208,29 +215,29 @@ function Pipeline() {
     const newComps = components.map((comp) => {
       if (comp.id === currComp.id) {
         const editorUpdate: {
-          name?: string;
           function_name?: string;
+          name?: string;
+          arguments?: JsonObject;
+          return_type?: string;
           description?: JsonObject;
           code?: string;
           state?: JsonObject;
         } = {};
-        if (pipelineEditorRef.current?.getName() !== undefined) {
-          editorUpdate.name = pipelineEditorRef.current?.getName();
+
+        if (pipelineEditorRef.current === null) {
+          console.error('Pipeline editor is null');
+          return comp;
         }
-        if (pipelineEditorRef.current?.getFunctionName() !== undefined) {
-          editorUpdate.function_name =
-            pipelineEditorRef.current?.getFunctionName();
-        }
-        if (pipelineEditorRef.current?.getDescription() !== undefined) {
-          editorUpdate.description =
-            pipelineEditorRef.current?.getDescription();
-        }
-        if (pipelineEditorRef.current?.getCode() !== undefined) {
-          editorUpdate.code = pipelineEditorRef.current?.getCode();
-        }
-        if (pipelineEditorRef.current?.getState() !== undefined) {
-          editorUpdate.state = pipelineEditorRef.current?.getState();
-        }
+
+        const pipelineEditor = pipelineEditorRef.current;
+
+        editorUpdate.function_name = pipelineEditor.getFunctionName();
+        editorUpdate.name = pipelineEditor.getName();
+        editorUpdate.arguments = pipelineEditor.getArguments();
+        editorUpdate.return_type = pipelineEditor.getReturnType();
+        editorUpdate.description = pipelineEditor.getDescription();
+        editorUpdate.code = pipelineEditor.getCode();
+        editorUpdate.state = pipelineEditor.getState();
 
         return {
           ...comp,
@@ -314,16 +321,12 @@ function Pipeline() {
   }, [pipelineOpened, containerHeight]);
 
   const editorTitle = React.useMemo(() => {
-    if (mode === 'code') {
-      return 'Code';
+    if (opened) {
+      return 'Component Editor';
     }
 
-    if (mode === 'attr') {
-      return 'Attributes';
-    }
-
-    return 'Nothing is selected';
-  }, [mode]);
+    return 'Pipeline Attributes Editor';
+  }, [opened]);
 
   const divider = React.useMemo(
     () => (
@@ -394,7 +397,8 @@ function Pipeline() {
             <PipelineEditor
               ref={pipelineEditorRef}
               component={component}
-              mode={mode}
+              pipelineAttributes={pipelineAttributes}
+              opened={opened}
               onUnsave={handleUnsave}
             />
           </Panel>
@@ -418,7 +422,15 @@ function Pipeline() {
         </ResizablePanel>
       </>
     ),
-    [pipelineOpened, pipeline, components, component, mode, editorHeight],
+    [
+      pipelineOpened,
+      pipeline,
+      pipelineAttributes,
+      components,
+      component,
+      opened,
+      editorHeight,
+    ],
   );
 
   const pipelineListPanel = React.useMemo(
@@ -446,11 +458,13 @@ function Pipeline() {
           <InspectPipeline
             ref={inspectPipelineRef}
             pipeline={pipeline}
+            pipelineAttributes={pipelineAttributes}
+            setPipelineAttributes={setPipelineAttributes}
             components={components}
             setComponents={handleSetComponentsUnsave}
-            component={component}
+            component={opened ? component : null}
             setComponent={handleSetComponent}
-            setMode={setMode}
+            setOpened={setOpened}
             onUnsave={handleUnsave}
           />
         ) : (
@@ -458,7 +472,15 @@ function Pipeline() {
         )}
       </Panel>
     ),
-    [pipelineOpened, pipeline, components, component, mode, editorHeight],
+    [
+      pipelineOpened,
+      pipeline,
+      pipelineAttributes,
+      components,
+      component,
+      opened,
+      editorHeight,
+    ],
   );
 
   return (
@@ -504,7 +526,15 @@ function Pipeline() {
               {pipelineListPanel}
             </Box>
           ),
-        [pipelineOpened, pipeline, components, component, mode, editorHeight],
+        [
+          pipelineOpened,
+          pipeline,
+          pipelineAttributes,
+          components,
+          component,
+          opened,
+          editorHeight,
+        ],
       )}
     </Box>
   );

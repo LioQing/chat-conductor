@@ -3,8 +3,10 @@ import { JsonObject } from '../utils/JsonObject';
 
 export interface Component {
   id: number;
-  name: string;
   function_name: string;
+  name: string;
+  arguments: JsonObject;
+  return_type: string;
   description: JsonObject;
   code: string;
   state: JsonObject;

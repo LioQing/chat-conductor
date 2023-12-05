@@ -3,7 +3,6 @@ import { ComposerAxiosRequest } from '../hooks/useComposerAxios';
 export interface Pipeline {
   id: number;
   name: string;
-  is_safe: boolean;
   created_at: string;
 }
 

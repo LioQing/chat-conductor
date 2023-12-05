@@ -16,7 +16,6 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import Box from '@mui/material/Box';
 import DeleteIcon from '@mui/icons-material/Delete';
 import IconButton from '@mui/material/IconButton';
-import CodeIcon from '@mui/icons-material/Code';
 import ButtonBase from '@mui/material/ButtonBase';
 import { useTheme } from '@mui/material/styles';
 import Dialog from '@mui/material/Dialog';
@@ -48,7 +47,7 @@ const renderItem =
     setComponents: (components: ComponentInstance[]) => void,
     component: ComponentInstance | null,
     setComponent: (component: ComponentInstance) => void,
-    setMode: (mode: 'code' | 'attr' | null) => void,
+    setOpened: (value: boolean) => void,
   ) =>
   (
     provided: DraggableProvided,
@@ -77,7 +76,7 @@ const renderItem =
 
     const handleComponentAttributes = () => {
       setComponent(thisComponent);
-      setMode('attr');
+      setOpened(true);
     };
 
     const handleComponentDelete = (e: React.MouseEvent) => {
@@ -100,16 +99,10 @@ const renderItem =
       setComponents(newComps);
 
       if (component?.id === thisComponent.id) {
-        setMode(null);
+        setOpened(false);
       }
       handleDialogClose();
     }, [componentInstanceDeleteClient.response]);
-
-    const handleComponentSelect = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setComponent(thisComponent);
-      setMode('code');
-    };
 
     const handleCheckbox = (e: React.ChangeEvent<HTMLInputElement>) => {
       e.stopPropagation();
@@ -207,17 +200,6 @@ const renderItem =
                 sx={{ textAlign: 'left' }}
               />
               <Box flexGrow={1} />
-              <Tooltip title="Code">
-                <IconButton
-                  edge="end"
-                  size="small"
-                  onClick={handleComponentSelect}
-                  onMouseDown={handleMouseDownStopPropagation}
-                >
-                  <CodeIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Box width={8} />
               <Tooltip title="Delete">
                 <IconButton
                   edge="end"
@@ -264,7 +246,7 @@ interface ComponentItemProps {
   setComponents: (components: ComponentInstance[]) => void;
   component: ComponentInstance | null;
   setComponent: (component: ComponentInstance) => void;
-  setMode: (mode: 'code' | 'attr' | null) => void;
+  setOpened: (value: boolean) => void;
   index: number;
 }
 
@@ -273,13 +255,19 @@ function ComponentItem({
   setComponents,
   component,
   setComponent,
-  setMode,
+  setOpened,
   index,
 }: ComponentItemProps) {
   const thisComponent = components[index];
   return (
     <Draggable draggableId={`${thisComponent.order}`} index={index}>
-      {renderItem(components, setComponents, component, setComponent, setMode)}
+      {renderItem(
+        components,
+        setComponents,
+        component,
+        setComponent,
+        setOpened,
+      )}
     </Draggable>
   );
 }
@@ -289,7 +277,7 @@ export interface ComponentListProps {
   setComponents: (components: ComponentInstance[]) => void;
   component: ComponentInstance | null;
   setComponent: (component: ComponentInstance | null) => void;
-  setMode: (mode: 'code' | 'attr' | null) => void;
+  setOpened: (value: boolean) => void;
 }
 
 function ComponentList({
@@ -297,7 +285,7 @@ function ComponentList({
   setComponents,
   component,
   setComponent,
-  setMode,
+  setOpened,
 }: ComponentListProps) {
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) {
@@ -333,9 +321,9 @@ function ComponentList({
               setComponents,
               component,
               setComponent,
-              setMode,
+              setOpened,
             ),
-          [components, setComponents, setComponent, setMode],
+          [components, setComponents, setComponent, setOpened],
         )}
       >
         {(provided: DroppableProvided) => (
@@ -351,7 +339,7 @@ function ComponentList({
                 setComponents={setComponents}
                 component={component}
                 setComponent={setComponent}
-                setMode={setMode}
+                setOpened={setOpened}
                 index={index}
               />
             ))}
