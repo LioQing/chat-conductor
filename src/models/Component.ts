@@ -7,7 +7,7 @@ export interface Component {
   name: string;
   arguments: JsonObject;
   return_type: string;
-  description: JsonObject;
+  description: string;
   code: string;
   state: JsonObject;
   is_template: boolean;

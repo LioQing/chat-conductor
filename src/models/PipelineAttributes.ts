@@ -3,7 +3,7 @@ import { JsonObject } from '../utils/JsonObject';
 
 export interface PipelineAttributes {
   state: JsonObject;
-  description: JsonObject;
+  description: string;
 }
 
 export const getPipelineAttributes = (id: number) =>

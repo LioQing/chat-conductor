@@ -33,13 +33,27 @@ import {
   JsonArray,
 } from '../utils/JsonObject';
 
-interface JsonTextFieldProps {
+export interface JsonChoice {
+  name: string;
+  default: JsonValue;
+}
+
+export const DefaultJsonChoices: { [key: string]: JsonChoice } = {
+  string: { name: 'String', default: 'Value' },
+  number: { name: 'Number', default: 0 },
+  boolean: { name: 'Boolean', default: false },
+  array: { name: 'Array', default: [] },
+  object: { name: 'Object', default: {} },
+  null: { name: 'Null', default: null },
+};
+
+export interface JsonTextFieldProps {
   type?: 'text' | 'number';
   value: string | number;
   onChange: (value: string) => void;
 }
 
-function JsonTextField({ type, value, onChange }: JsonTextFieldProps) {
+export function JsonTextField({ type, value, onChange }: JsonTextFieldProps) {
   const [openString, setOpenString] = React.useState(false);
 
   const handleClickOpenString = () => {
@@ -113,6 +127,8 @@ const renderItem =
     setHandleHovered: (handleHovered: boolean[]) => void,
     objectKeys: string[],
     removeButton: (k: string | number) => React.ReactNode,
+    startComponentBuilder: (accessor: (string | number)[]) => React.ReactNode,
+    builderAccessor: (string | number)[],
   ) =>
   (
     provided: DraggableProvided,
@@ -164,12 +180,19 @@ const renderItem =
           <DragIndicatorIcon color="primary" />
         </Box>
         <Box>
-          {(isJsonObject(v) || isJsonArray(v)) && (
-            <Typography variant="body1">
-              {isJsonObject(v) ? '{' : isJsonArray(v) ? '[' : ''}
-            </Typography>
-          )}
           <Box display="flex" flexDirection="row" alignItems="center">
+            {(isJsonObject(v) || isJsonArray(v)) && (
+              <>
+                {startComponentBuilder?.(builderAccessor?.concat(i)!)}
+                <Typography variant="body1">
+                  {isJsonObject(v) ? '{' : isJsonArray(v) ? '[' : ''}
+                </Typography>
+              </>
+            )}
+          </Box>
+          <Box display="flex" flexDirection="row" alignItems="center">
+            {!(isJsonObject(v) || isJsonArray(v)) &&
+              startComponentBuilder?.(builderAccessor?.concat(i)!)}
             <JsonEditor
               value={v}
               onChange={(w, childrenK) => {
@@ -215,6 +238,8 @@ interface JsonArrayEditorItemProps {
   setHandleHovered: (handleHovered: boolean[]) => void;
   objectKeys: string[];
   removeButton: (k: string | number) => React.ReactNode;
+  startComponentBuilder: (accessor: (string | number)[]) => React.ReactNode;
+  builderAccessor: (string | number)[];
   index: number;
 }
 
@@ -227,6 +252,8 @@ function JsonArrayEditorItem({
   setHandleHovered,
   objectKeys,
   removeButton,
+  startComponentBuilder,
+  builderAccessor,
   index,
 }: JsonArrayEditorItemProps) {
   return (
@@ -240,6 +267,8 @@ function JsonArrayEditorItem({
         setHandleHovered,
         objectKeys,
         removeButton,
+        startComponentBuilder,
+        builderAccessor,
       )}
     </Draggable>
   );
@@ -256,6 +285,8 @@ interface JsonArrayEditorProps {
   base: boolean;
   addButton: React.ReactNode;
   removeButton: (k: string | number) => React.ReactNode;
+  startComponentBuilder: (accessor: (string | number)[]) => React.ReactNode;
+  builderAccessor: (string | number)[];
 }
 
 function JsonArrayEditor({
@@ -267,6 +298,8 @@ function JsonArrayEditor({
   base,
   addButton,
   removeButton,
+  startComponentBuilder,
+  builderAccessor,
 }: JsonArrayEditorProps) {
   const [handleHovered, setHandleHovered] = React.useState(
     Array(value.length).fill(false),
@@ -317,6 +350,8 @@ function JsonArrayEditor({
               setHandleHovered,
               objectKeys,
               removeButton,
+              startComponentBuilder,
+              builderAccessor,
             ),
           [value, onChange],
         )}
@@ -343,6 +378,8 @@ function JsonArrayEditor({
                 setHandleHovered={setHandleHovered}
                 objectKeys={objectKeys}
                 removeButton={removeButton}
+                startComponentBuilder={startComponentBuilder}
+                builderAccessor={builderAccessor}
                 index={index}
               />
             ))}
@@ -360,9 +397,20 @@ export interface JsonEditorProps {
   onChange: (value: JsonValue, objectKeys?: string[]) => void;
   objectKeys?: string[];
   base?: boolean;
+  jsonChoices?: { [key: string]: JsonChoice };
+  startComponentBuilder?: (accessor: (string | number)[]) => React.ReactNode;
+  builderAccessor?: (string | number)[];
 }
 
-function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
+function JsonEditor({
+  value,
+  onChange,
+  objectKeys,
+  base,
+  jsonChoices,
+  startComponentBuilder,
+  builderAccessor,
+}: JsonEditorProps) {
   const theme = useTheme();
   const [addMenu, setAddMenu] = React.useState(false);
 
@@ -462,12 +510,11 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
       </Button>
       <Collapse in={addMenu}>
         <ButtonGroup orientation="vertical" variant="contained" fullWidth>
-          <Button onClick={() => handleAdd('Value')}>String</Button>
-          <Button onClick={() => handleAdd(0)}>Number</Button>
-          <Button onClick={() => handleAdd(false)}>Boolean</Button>
-          <Button onClick={() => handleAdd([])}>Array</Button>
-          <Button onClick={() => handleAdd({})}>Object</Button>
-          <Button onClick={() => handleAdd(null)}>Null</Button>
+          {Object.entries(jsonChoices as object).map(([k, v]) => (
+            <Button key={k} onClick={() => handleAdd(v.default)}>
+              {v.name}
+            </Button>
+          ))}
         </ButtonGroup>
       </Collapse>
     </>
@@ -520,8 +567,9 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
                   value={k}
                   onChange={(v) => handleChangeObjectKey(k, v)}
                 />
+                <Typography variant="body1">:</Typography>
+                {startComponentBuilder?.(builderAccessor?.concat(k)!)}
                 <Typography variant="body1">
-                  :
                   {isJsonObject(value[k])
                     ? '{'
                     : isJsonArray(value[k])
@@ -543,6 +591,7 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
                         }
                       }}
                       objectKeys={childrenObjectKeys![i] ?? undefined}
+                      jsonChoices={jsonChoices}
                     />
                     {removeButton(k)}
                   </>
@@ -563,6 +612,7 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
                       }
                     }}
                     objectKeys={childrenObjectKeys![i] ?? undefined}
+                    jsonChoices={jsonChoices}
                   />
                   <Box display="flex" flexDirection="row" alignItems="center">
                     <Typography variant="body1">
@@ -590,6 +640,8 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
           base={base!}
           addButton={addButtons}
           removeButton={removeButton}
+          startComponentBuilder={startComponentBuilder!}
+          builderAccessor={builderAccessor!}
         />
       ) : (
         <Typography variant="body1">null</Typography>
@@ -601,6 +653,9 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
 JsonEditor.defaultProps = {
   objectKeys: [],
   base: false,
+  jsonChoices: DefaultJsonChoices,
+  startComponentBuilder: () => null,
+  builderAccessor: [],
 };
 
 export default JsonEditor;

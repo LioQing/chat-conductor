@@ -212,6 +212,10 @@ function Pipeline() {
       return [];
     }
 
+    if (opened) {
+      return components;
+    }
+
     const newComps = components.map((comp) => {
       if (comp.id === currComp.id) {
         const editorUpdate: {
@@ -219,7 +223,7 @@ function Pipeline() {
           name?: string;
           arguments?: JsonObject;
           return_type?: string;
-          description?: JsonObject;
+          description?: string;
           code?: string;
           state?: JsonObject;
         } = {};
@@ -319,6 +323,19 @@ function Pipeline() {
       setEditorHeight(0);
     }
   }, [pipelineOpened, containerHeight]);
+
+  const handleSetOpened = (value: boolean) => {
+    if (value) {
+      const description = pipelineEditorRef.current?.getDescription();
+      if (description) {
+        setPipelineAttributes((prev) => ({
+          ...prev!,
+          description,
+        }));
+      }
+    }
+    setOpened(value);
+  };
 
   const editorTitle = React.useMemo(() => {
     if (opened) {
@@ -464,7 +481,7 @@ function Pipeline() {
             setComponents={handleSetComponentsUnsave}
             component={opened ? component : null}
             setComponent={handleSetComponent}
-            setOpened={setOpened}
+            setOpened={handleSetOpened}
             onUnsave={handleUnsave}
           />
         ) : (

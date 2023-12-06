@@ -25,3 +25,16 @@ export const isJsonValue = (value: any): value is JsonValue =>
   value === null ||
   isJsonArray(value) ||
   isJsonObject(value);
+
+export const JsonTypeName = (value: JsonValue): string => {
+  if (value === null) {
+    return 'null';
+  }
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+  if (typeof value === 'object') {
+    return 'object';
+  }
+  return typeof value;
+};

@@ -9,7 +9,7 @@ export interface PipelineSaveComponentInstance {
   name: string;
   arguments: JsonObject;
   return_type: string;
-  description: JsonObject;
+  description: string;
   code: string;
   state: JsonObject;
 }
@@ -17,7 +17,7 @@ export interface PipelineSaveComponentInstance {
 export interface PipelineSaveRequest {
   name: string;
   state: JsonObject;
-  description: JsonObject;
+  description: string;
   components: PipelineSaveComponentInstance[];
 }
 

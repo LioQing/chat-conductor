@@ -20,7 +20,7 @@ import {
 } from '../models/ChatHistory';
 import { Pipeline } from '../models/Pipeline';
 import { ChatSend, ChatSendRequest, postChatSend } from '../models/ChatSend';
-import usePrevious from '../hooks/usePrevious';
+import MarkdownEditor from './MarkdownEditor';
 
 const pageSize = 25;
 const messageRowPadding = 16;
@@ -49,7 +49,6 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [chatErrorOpened, setChatErrorOpened] = React.useState(false);
   const [chatError, setChatError] = React.useState<string | null>(null);
-  const prevMessages = usePrevious(messages);
   const messagesBottomRef = React.useRef<HTMLDivElement>(null);
   const messageRowRef = React.useRef<HTMLTextAreaElement | HTMLInputElement>(
     null,
@@ -152,8 +151,11 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
   React.useEffect(() => {
     if (!moreChatPageClient.response) return;
 
-    if (moreChatPageClient.response.data.length === 0) {
+    if (moreChatPageClient.response.data.length < pageSize) {
       setHasMore(false);
+    }
+
+    if (moreChatPageClient.response.data.length === 0) {
       return;
     }
 
@@ -179,7 +181,12 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
     // do not push duplicated messages
     const lastMessageId = messages[messages.length - 1].id;
     const lastDupIndex = moreChatPageClient.response.data.findLastIndex(
-      (chatHistory: ChatHistory) => `assi${chatHistory.id}` === lastMessageId,
+      (chatHistory: ChatHistory) => `user${chatHistory.id}` === lastMessageId,
+    );
+    console.log(
+      lastMessageId,
+      moreChatPageClient.response.data.map((c: ChatHistory) => c.id),
+      lastDupIndex,
     );
 
     setMessages([
@@ -317,18 +324,6 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
       } as ChatSendRequest),
     );
   };
-
-  React.useEffect(() => {
-    // skip if the update is the new message
-    if (
-      prevMessages?.at(0)?.id.startsWith('usertemp') ||
-      prevMessages?.at(0)?.id === messages.at(0)?.id
-    ) {
-      return;
-    }
-
-    messagesBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   const messageRow = (
     <Box display="flex" flexDirection="row">
@@ -471,18 +466,20 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
                         message.role === Role.User ? 'primary.main' : undefined,
                       color:
                         message.role === Role.User
-                          ? 'primary.contrastText'
-                          : 'patlette.text.primary',
+                          ? theme.palette.primary.contrastText
+                          : theme.palette.text.primary,
                       overflowWrap: 'break-word',
                     }}
                   >
-                    <Typography
-                      variant="body2"
-                      color="inherit"
-                      sx={{ whiteSpace: 'pre-line' }}
-                    >
-                      {message.content}
-                    </Typography>
+                    <MarkdownEditor
+                      readonly
+                      content={message.content}
+                      codeColor={
+                        message.role === Role.User
+                          ? theme.palette.primary.contrastText
+                          : undefined
+                      }
+                    />
                   </Paper>
                 </Box>
               ))}

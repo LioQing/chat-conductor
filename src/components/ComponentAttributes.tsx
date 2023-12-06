@@ -2,8 +2,10 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import { useTheme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
 import Collapse from '@mui/material/Collapse';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ButtonBase from '@mui/material/ButtonBase';
 import TextField from '@mui/material/TextField';
@@ -11,38 +13,12 @@ import MenuItem from '@mui/material/MenuItem';
 import Divider from '@mui/material/Divider';
 import Editor from '@monaco-editor/react';
 import { editor } from 'monaco-editor';
-import StarterKit from '@tiptap/starter-kit';
-import TextStyle from '@tiptap/extension-text-style';
-import Underline from '@tiptap/extension-underline';
-import TaskList from '@tiptap/extension-task-list';
-import TaskItem from '@tiptap/extension-task-item';
-import Subscript from '@tiptap/extension-subscript';
-import Superscript from '@tiptap/extension-superscript';
-import {
-  RichTextEditor,
-  FontSize,
-  type RichTextEditorRef,
-  MenuButtonBold,
-  MenuButtonItalic,
-  MenuControlsContainer,
-  MenuDivider,
-  MenuSelectFontSize,
-  MenuButtonUnderline,
-  MenuButtonStrikethrough,
-  MenuButtonSubscript,
-  MenuButtonSuperscript,
-  MenuButtonBlockquote,
-  MenuButtonCode,
-  MenuButtonCodeBlock,
-  MenuButtonUndo,
-  MenuButtonRedo,
-  MenuButtonBulletedList,
-  MenuButtonOrderedList,
-  MenuButtonTaskList,
-} from 'mui-tiptap';
+import { type RichTextEditorRef } from 'mui-tiptap';
+import { Editor as TipTapEditor } from '@tiptap/react';
 import JsonEditor from './JsonEditor';
-import { JsonObject } from '../utils/JsonObject';
+import { JsonObject, JsonTypeName } from '../utils/JsonObject';
 import { ComponentInstance } from '../models/ComponentInstance';
+import MarkdownEditor from './MarkdownEditor';
 
 const buttonBaseSx = {
   width: '100%',
@@ -94,7 +70,7 @@ function ComponentAttributes({
     });
   };
 
-  const handleChangeDescription = (v: JsonObject) => {
+  const handleChangeDescription = (v: string) => {
     setComponentAndStateKeys({
       component: { ...component, description: v },
       stateKeys,
@@ -152,6 +128,45 @@ function ComponentAttributes({
     setCodeOpened((prev) => !prev);
   };
 
+  const handleGenerateFunctionSignature = () => {
+    const currCode = component.code;
+
+    const jsonToPythonType: { [key: string]: string } = {
+      null: 'None',
+      string: 'str',
+      number: 'int | float',
+      boolean: 'bool',
+      array: 'list',
+      object: 'dict',
+    };
+
+    const selectToPythonType: { [key: string]: string } = {
+      none: 'None',
+      string: 'str',
+      number: 'int | float',
+      boolean: 'bool',
+      list: 'list',
+      dictionary: 'dict',
+    };
+
+    const def = `\n\ndef ${component.function_name}(`;
+    const args = Object.entries(component.arguments ?? {}).map(([k, v]) => {
+      const type = jsonToPythonType[JsonTypeName(v)];
+      return `${k}: ${type}`;
+    });
+    const argsStr = args.length > 2 ? args.join(',\n    ') : args.join(', ');
+    const returnType = selectToPythonType[component.return_type];
+    const returnStr = `${args.length > 2 ? '\n' : ''}) -> ${returnType}:`;
+
+    const code = `${currCode}${def}${argsStr}${returnStr}`;
+
+    setComponentAndStateKeys({
+      component: { ...component, code },
+      stateKeys,
+      argumentKeys,
+    });
+  };
+
   const onEditorSizeChange = (editor: editor.IStandaloneCodeEditor) => () => {
     const height = Math.max(180, Math.min(540, editor.getContentHeight()));
     editor.layout({
@@ -180,7 +195,7 @@ function ComponentAttributes({
           label="Name"
           size="small"
           variant="standard"
-          autoComplete="new-password" // https://learn.microsoft.com/en-us/answers/questions/974921/edge-bug-autocomplete-off-still-displays-previousl
+          autoComplete="new-password"
           sx={{ my: 1, flex: 1 }}
         />
         <Typography variant="body2">
@@ -206,7 +221,7 @@ function ComponentAttributes({
                 label="Function Name"
                 size="small"
                 variant="outlined"
-                autoComplete="new-password" // https://learn.microsoft.com/en-us/answers/questions/974921/edge-bug-autocomplete-off-still-displays-previousl
+                autoComplete="new-password"
                 sx={{ my: 1, flex: 1 }}
               />
               <TextField
@@ -233,8 +248,23 @@ function ComponentAttributes({
                 onChange={(v, k) => handleChangeArguments(v as JsonObject, k)}
                 objectKeys={argumentKeys}
                 base
+                jsonChoices={{
+                  string: { name: 'String', default: 'Value' },
+                  number: { name: 'Number', default: 0 },
+                  boolean: { name: 'Boolean', default: false },
+                  array: { name: 'List', default: [] },
+                  object: { name: 'Dictionary', default: {} },
+                  null: { name: 'None', default: null },
+                }}
               />
             </Box>
+            <Button
+              variant="outlined"
+              onClick={handleGenerateFunctionSignature}
+              startIcon={<AutoAwesomeIcon />}
+            >
+              Generate Function Signature
+            </Button>
           </Box>
         </Collapse>
       </Box>
@@ -265,46 +295,12 @@ function ComponentAttributes({
         </ButtonBase>
         <Collapse in={descriptionOpened}>
           <Box my={1}>
-            <RichTextEditor
+            <MarkdownEditor
               ref={rteRef}
-              extensions={[
-                StarterKit,
-                TextStyle,
-                FontSize,
-                Underline,
-                TaskList,
-                TaskItem,
-                Subscript,
-                Superscript,
-              ]}
               content={component.description}
-              onUpdate={({ editor }) =>
-                handleChangeDescription(editor.getJSON())
+              onUpdate={({ editor }: { editor: TipTapEditor }) =>
+                handleChangeDescription(editor.storage.markdown.getMarkdown())
               }
-              renderControls={() => (
-                <MenuControlsContainer>
-                  <MenuSelectFontSize />
-                  <MenuDivider />
-                  <MenuButtonBold />
-                  <MenuButtonItalic />
-                  <MenuButtonUnderline />
-                  <MenuButtonStrikethrough />
-                  <MenuButtonSubscript />
-                  <MenuButtonSuperscript />
-                  <MenuDivider />
-                  <MenuButtonBulletedList />
-                  <MenuButtonOrderedList />
-                  <MenuButtonTaskList />
-                  <MenuDivider />
-                  <MenuButtonBlockquote />
-                  <MenuDivider />
-                  <MenuButtonCode />
-                  <MenuButtonCodeBlock />
-                  <MenuDivider />
-                  <MenuButtonUndo />
-                  <MenuButtonRedo />
-                </MenuControlsContainer>
-              )}
             />
           </Box>
         </Collapse>
