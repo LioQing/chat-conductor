@@ -106,7 +106,7 @@ function Admin() {
       return;
     }
 
-    console.log(createUserClient.error);
+    console.error(createUserClient.error);
   }, [createUserClient.error]);
 
   React.useEffect(() => {

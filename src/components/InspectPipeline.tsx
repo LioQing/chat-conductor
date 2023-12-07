@@ -23,90 +23,61 @@ import {
   ComponentInstanceNewRequest,
   postComponentInstanceNew,
 } from '../models/ComponentInstanceNew';
-import {
-  PipelineAttributes,
-  getPipelineAttributes,
-} from '../models/PipelineAttributes';
 
 export interface InspectPipelineRef {
-  getPipelineName: () => string;
-  getPipelineAttributes: () => PipelineAttributes | null;
-  onRun: () => void;
+  getPipeline: () => Pipeline;
+  getComponents: () => ComponentInstance[];
 }
 
 export interface InspectPipelineProps {
   pipeline: Pipeline;
-  pipelineAttributes: PipelineAttributes | null;
-  setPipelineAttributes: (state: PipelineAttributes | null) => void;
   components: ComponentInstance[];
-  setComponents: (components: ComponentInstance[]) => void;
   component: ComponentInstance | null;
-  setComponent: (component: ComponentInstance | null) => void;
-  setOpened: (value: boolean) => void;
-  onUnsave: () => void;
+  onPipelineChange: (pipeline: Pipeline) => void;
+  onComponentsChange: (component: ComponentInstance[]) => void;
+  onComponentSelect: (id: number | null) => void;
+  onComponentEnableToggle: (id: number) => void;
+  onComponentNew: (component: ComponentInstance) => void;
+  onComponentDelete: (id: number) => void;
 }
 
 const InspectPipeline = React.forwardRef(
   (
     {
       pipeline,
-      pipelineAttributes,
-      setPipelineAttributes,
       components,
-      setComponents,
       component,
-      setComponent,
-      setOpened,
-      onUnsave,
+      onPipelineChange,
+      onComponentsChange,
+      onComponentSelect,
+      onComponentEnableToggle,
+      onComponentNew,
+      onComponentDelete,
     }: InspectPipelineProps,
     ref,
   ) => {
-    const [pipelineName, setPipelineName] = React.useState(pipeline.name);
-    const [addComponentDialog, setAddComponentDialog] = React.useState(false);
-    const [addComponent, setAddComponent] = React.useState<Component | null>(
-      null,
-    );
-    const pipelineAttributesClient = useComposerAxios<PipelineAttributes>();
+    // add component dialogs
 
-    const fetchPipelineAttributes = () => {
-      pipelineAttributesClient.sendRequest(getPipelineAttributes(pipeline.id));
+    const [addComponentDialog, setAddComponentDialog] = React.useState(false);
+    const addComponentSelectClient = useComposerAxios<Component>();
+
+    const handleAddComponentSelect = (id: number) => {
+      addComponentSelectClient.sendRequest(getComponent(id));
     };
 
     React.useEffect(() => {
-      fetchPipelineAttributes();
-    }, []);
+      if (!addComponentSelectClient.response) return;
 
-    React.useEffect(() => {
-      if (!pipelineAttributesClient.response) {
-        return;
-      }
+      setAddComponent(addComponentSelectClient.response.data);
+    }, [addComponentSelectClient.response]);
 
-      setPipelineAttributes(pipelineAttributesClient.response.data);
-    }, [pipelineAttributesClient.response]);
-
-    const addComponentSelectClient = useComposerAxios<Component>();
+    const [addComponent, setAddComponent] = React.useState<Component | null>(
+      null,
+    );
     const addComponentClient = useComposerAxios<
       ComponentInstanceNew,
       ComponentInstanceNewRequest
     >();
-
-    const handleChangeName = (e: React.ChangeEvent<HTMLInputElement>) => {
-      setPipelineName(e.target.value);
-      onUnsave();
-    };
-
-    const handleAddComponentDialogOpen = () => {
-      setAddComponentDialog(true);
-      setAddComponent(null);
-    };
-
-    const handleAddComponentDialogClose = () => {
-      if (addComponent) {
-        setAddComponent(null);
-        return;
-      }
-      setAddComponentDialog(false);
-    };
 
     const handleAddComponent = () => {
       setAddComponentDialog(false);
@@ -124,29 +95,53 @@ const InspectPipeline = React.forwardRef(
     React.useEffect(() => {
       if (!addComponentClient.response) return;
 
-      setComponent(addComponentClient.response.data);
-      setOpened(true);
-      setComponents([...components, addComponentClient.response.data]);
+      const component = addComponentClient.response.data;
+      onComponentNew(component);
     }, [addComponentClient.response]);
 
-    const handleAddComponentSelect = (id: number) => {
-      addComponentSelectClient.sendRequest(getComponent(id));
+    const handleAddComponentDialogOpen = () => {
+      setAddComponentDialog(true);
+      setAddComponent(null);
     };
 
+    const handleAddComponentDialogClose = () => {
+      if (addComponent) {
+        setAddComponent(null);
+        return;
+      }
+      setAddComponentDialog(false);
+    };
+
+    // edits
+
+    const [pipelineName, setPipelineName] = React.useState(pipeline.name);
+
+    const handleChangeName = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setPipelineName(e.target.value);
+      onPipelineChange({ ...pipeline, name: e.target.value });
+    };
+
+    const handlePipelineAttributesSelect = () => {
+      onComponentSelect(null);
+    };
+
+    // effects
+
     React.useEffect(() => {
-      if (!addComponentSelectClient.response) return;
+      if (!pipeline) return;
 
-      setAddComponent(addComponentSelectClient.response.data);
-    }, [addComponentSelectClient.response]);
+      setPipelineName(pipeline.name);
+    }, [pipeline]);
 
-    React.useImperativeHandle(
-      ref,
-      (): InspectPipelineRef => ({
-        getPipelineName: () => pipelineName,
-        getPipelineAttributes: () => pipelineAttributes,
-        onRun: fetchPipelineAttributes,
+    // imperative
+
+    React.useImperativeHandle(ref, () => ({
+      getPipeline: () => ({
+        ...pipeline,
+        name: pipelineName,
       }),
-    );
+      getComponents: () => components,
+    }));
 
     return (
       <Box display="flex" flexDirection="column" gap={1} minHeight={0}>
@@ -166,7 +161,7 @@ const InspectPipeline = React.forwardRef(
           </Typography>
           <Button
             variant="outlined"
-            onClick={() => setOpened(false)}
+            onClick={handlePipelineAttributesSelect}
             sx={{
               width: '100%',
               my: 1,
@@ -196,10 +191,11 @@ const InspectPipeline = React.forwardRef(
               <Box overflow="auto" pl={3} pr={2}>
                 <ComponentList
                   components={components}
-                  setComponents={setComponents}
                   component={component}
-                  setComponent={setComponent}
-                  setOpened={setOpened}
+                  onComponentsChange={onComponentsChange}
+                  onComponentSelect={onComponentSelect}
+                  onComponentEnableToggle={onComponentEnableToggle}
+                  onComponentDelete={onComponentDelete}
                 />
               </Box>
             </Box>

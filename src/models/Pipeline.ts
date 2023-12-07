@@ -6,9 +6,9 @@ export interface Pipeline {
   created_at: string;
 }
 
-export const getPipeline = () =>
+export const getPipelines = () =>
   ({
-    url: '/conductor/pipeline/',
+    url: '/conductor/pipelines/',
     method: 'get',
   }) as ComposerAxiosRequest;
 

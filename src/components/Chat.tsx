@@ -28,7 +28,8 @@ const messageRowMaxRows = 3;
 
 export interface ChatProps {
   pipeline: Pipeline;
-  onPipelineRun: () => void;
+  onChatSend: () => void;
+  onChatReceive: () => void;
 }
 
 enum Role {
@@ -42,7 +43,7 @@ interface Message {
   content: string;
 }
 
-function Chat({ pipeline, onPipelineRun }: ChatProps) {
+function Chat({ pipeline, onChatSend, onChatReceive }: ChatProps) {
   const theme = useTheme();
   const [inputMessage, setInputMessage] = React.useState('');
   const [disabled, setDisabled] = React.useState(false);
@@ -114,8 +115,6 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
       ...newMessages,
       ...messages.filter((message) => !message.id.startsWith('usertemp')),
     ]);
-
-    onPipelineRun();
   }, [firstChatPageClient.response]);
 
   // more chat page
@@ -183,11 +182,6 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
     const lastDupIndex = moreChatPageClient.response.data.findLastIndex(
       (chatHistory: ChatHistory) => `user${chatHistory.id}` === lastMessageId,
     );
-    console.log(
-      lastMessageId,
-      moreChatPageClient.response.data.map((c: ChatHistory) => c.id),
-      lastDupIndex,
-    );
 
     setMessages([
       ...messages,
@@ -224,6 +218,7 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
 
     fetchFirstChatPage();
     setDisabled(false);
+    onChatReceive();
   }, [chatSendClient.response]);
 
   React.useEffect(() => {
@@ -323,6 +318,8 @@ function Chat({ pipeline, onPipelineRun }: ChatProps) {
         user_message: userMessage.content,
       } as ChatSendRequest),
     );
+
+    onChatSend();
   };
 
   const messageRow = (

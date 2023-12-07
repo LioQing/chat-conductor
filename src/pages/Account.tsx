@@ -122,7 +122,7 @@ function Account() {
   React.useEffect(() => {
     if (!accountPasswordChangeClient.error) return;
 
-    console.log(accountPasswordChangeClient.error);
+    console.error(accountPasswordChangeClient.error);
     if (accountPasswordChangeClient.error.response?.status === 400) {
       const { data } = accountPasswordChangeClient.error.response;
       setOldPasswordError((data as any).detail);

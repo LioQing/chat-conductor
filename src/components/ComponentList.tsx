@@ -44,10 +44,10 @@ const reorder = (list: any[], startIndex: number, endIndex: number) => {
 const renderItem =
   (
     components: ComponentInstance[],
-    setComponents: (components: ComponentInstance[]) => void,
     component: ComponentInstance | null,
-    setComponent: (component: ComponentInstance) => void,
-    setOpened: (value: boolean) => void,
+    onComponentSelect: (id: number) => void,
+    onComponentEnableToggle: (id: number) => void,
+    onComponentDelete: (id: number) => void,
   ) =>
   (
     provided: DraggableProvided,
@@ -74,9 +74,8 @@ const renderItem =
       setDeleteDialog(true);
     };
 
-    const handleComponentAttributes = () => {
-      setComponent(thisComponent);
-      setOpened(true);
+    const handleComponentSelect = () => {
+      onComponentSelect(thisComponent.id);
     };
 
     const handleComponentDelete = (e: React.MouseEvent) => {
@@ -89,35 +88,13 @@ const renderItem =
     React.useEffect(() => {
       if (!componentInstanceDeleteClient.response) return;
 
-      let newComps = components.filter(
-        (comp: ComponentInstance) => comp.id !== thisComponent.id,
-      );
-      newComps = newComps.map((comp: ComponentInstance, index: number) => ({
-        ...comp,
-        order: index,
-      }));
-      setComponents(newComps);
-
-      if (component?.id === thisComponent.id) {
-        setOpened(false);
-      }
+      onComponentDelete(thisComponent.id);
       handleDialogClose();
     }, [componentInstanceDeleteClient.response]);
 
     const handleCheckbox = (e: React.ChangeEvent<HTMLInputElement>) => {
       e.stopPropagation();
-      const newComps = components.map((comp: ComponentInstance) => {
-        if (comp.id === thisComponent.id) {
-          return {
-            ...comp,
-            is_enabled: e.target.checked,
-          };
-        }
-
-        return comp;
-      });
-
-      setComponents(newComps);
+      onComponentEnableToggle(thisComponent.id);
     };
 
     return (
@@ -141,7 +118,7 @@ const renderItem =
         >
           <ButtonBase
             component="div"
-            onClick={handleComponentAttributes}
+            onClick={handleComponentSelect}
             sx={{
               py: 1,
               px: 2,
@@ -243,19 +220,19 @@ const renderItem =
 
 interface ComponentItemProps {
   components: ComponentInstance[];
-  setComponents: (components: ComponentInstance[]) => void;
   component: ComponentInstance | null;
-  setComponent: (component: ComponentInstance) => void;
-  setOpened: (value: boolean) => void;
+  onComponentSelect: (id: number | null) => void;
+  onComponentEnableToggle: (id: number) => void;
+  onComponentDelete: (id: number) => void;
   index: number;
 }
 
 function ComponentItem({
   components,
-  setComponents,
   component,
-  setComponent,
-  setOpened,
+  onComponentSelect,
+  onComponentEnableToggle,
+  onComponentDelete,
   index,
 }: ComponentItemProps) {
   const thisComponent = components[index];
@@ -263,92 +240,146 @@ function ComponentItem({
     <Draggable draggableId={`${thisComponent.order}`} index={index}>
       {renderItem(
         components,
-        setComponents,
         component,
-        setComponent,
-        setOpened,
+        onComponentSelect,
+        onComponentEnableToggle,
+        onComponentDelete,
       )}
     </Draggable>
   );
 }
 
+export interface ComponentListRef {
+  getComponents: () => ComponentInstance[];
+}
+
 export interface ComponentListProps {
   components: ComponentInstance[];
-  setComponents: (components: ComponentInstance[]) => void;
   component: ComponentInstance | null;
-  setComponent: (component: ComponentInstance | null) => void;
-  setOpened: (value: boolean) => void;
+  onComponentsChange: (components: ComponentInstance[]) => void;
+  onComponentSelect: (id: number | null) => void;
+  onComponentEnableToggle: (id: number) => void;
+  onComponentDelete: (id: number) => void;
 }
 
-function ComponentList({
-  components,
-  setComponents,
-  component,
-  setComponent,
-  setOpened,
-}: ComponentListProps) {
-  const handleDragEnd = (result: DropResult) => {
-    if (!result.destination) {
-      return;
-    }
-
-    if (result.destination.index === result.source.index) {
-      return;
-    }
-
-    let newComps = reorder(
+const ComponentList = React.forwardRef(
+  (
+    {
       components,
-      result.source.index,
-      result.destination.index,
-    );
+      component,
+      onComponentsChange,
+      onComponentSelect,
+      onComponentEnableToggle,
+      onComponentDelete,
+    }: ComponentListProps,
+    ref: React.Ref<ComponentListRef>,
+  ) => {
+    const [componentList, setComponentList] =
+      React.useState<ComponentInstance[]>(components);
 
-    newComps = newComps.map((comp: ComponentInstance, index: number) => ({
-      ...comp,
-      order: index,
+    const handleComponentsChange = (result: DropResult) => {
+      if (!result.destination) {
+        return;
+      }
+
+      if (result.destination.index === result.source.index) {
+        return;
+      }
+
+      let newComps = reorder(
+        components,
+        result.source.index,
+        result.destination.index,
+      );
+
+      newComps = newComps.map((comp: ComponentInstance, index: number) => ({
+        ...comp,
+        order: index,
+      }));
+
+      setComponentList(newComps);
+      onComponentsChange(newComps);
+    };
+
+    const handleComponentSelect = (id: number | null) => {
+      onComponentSelect(id);
+    };
+
+    const handleComponentEnableToggle = (id: number) => {
+      setComponentList(
+        componentList.map((comp: ComponentInstance) => {
+          if (comp.id === id) {
+            return {
+              ...comp,
+              is_enabled: !comp.is_enabled,
+            };
+          }
+
+          return comp;
+        }),
+      );
+      onComponentEnableToggle(id);
+    };
+
+    const handleComponentDelete = (id: number) => {
+      setComponentList(
+        componentList.filter((comp: ComponentInstance) => comp.id !== id),
+      );
+      onComponentDelete(id);
+    };
+
+    // effects
+
+    React.useEffect(() => {
+      setComponentList(components);
+    }, [components]);
+
+    // imperative
+
+    React.useImperativeHandle(ref, () => ({
+      getComponents: () => componentList,
     }));
 
-    setComponents(newComps);
-  };
-
-  return (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      <Droppable
-        droppableId="droppable"
-        renderClone={React.useMemo(
-          () =>
-            renderItem(
-              components,
-              setComponents,
-              component,
-              setComponent,
-              setOpened,
-            ),
-          [components, setComponents, setComponent, setOpened],
-        )}
-      >
-        {(provided: DroppableProvided) => (
-          <List
-            ref={provided.innerRef}
-            {...provided.droppableProps}
-            sx={{ transform: 'none' }}
-          >
-            {components.map((c: ComponentInstance, index: number) => (
-              <ComponentItem
-                key={c.order}
-                components={components}
-                setComponents={setComponents}
-                component={component}
-                setComponent={setComponent}
-                setOpened={setOpened}
-                index={index}
-              />
-            ))}
-            {provided.placeholder}
-          </List>
-        )}
-      </Droppable>
-    </DragDropContext>
-  );
-}
+    return (
+      <DragDropContext onDragEnd={handleComponentsChange}>
+        <Droppable
+          droppableId="droppable"
+          renderClone={React.useMemo(
+            () =>
+              renderItem(
+                components,
+                component,
+                handleComponentSelect,
+                handleComponentEnableToggle,
+                handleComponentDelete,
+              ),
+            [components, component],
+          )}
+        >
+          {(provided: DroppableProvided) => (
+            <List
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              sx={{ transform: 'none' }}
+            >
+              {components.map((c: ComponentInstance, index: number) => (
+                <ComponentItem
+                  key={c.order}
+                  components={components}
+                  component={component}
+                  onComponentSelect={handleComponentSelect}
+                  onComponentEnableToggle={handleComponentEnableToggle}
+                  onComponentDelete={handleComponentDelete}
+                  index={index}
+                />
+              ))}
+              {provided.placeholder}
+            </List>
+          )}
+        </Droppable>
+      </DragDropContext>
+    );
+  },
+);
 
 export default ComponentList;

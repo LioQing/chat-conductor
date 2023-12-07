@@ -24,6 +24,7 @@ export interface ComposerAxiosClient<
   TData extends object = {},
   TParams extends object = {},
 > {
+  request: ComposerAxiosRequest<TBody, TData, TParams> | null;
   response: AxiosResponse<TResponseData> | null;
   error: AxiosError | null;
   loading: boolean;
@@ -117,6 +118,7 @@ const useComposerAxios = <
   );
 
   return {
+    request,
     response,
     error,
     loading,

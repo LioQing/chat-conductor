@@ -12,6 +12,13 @@ import JsonEditor from './JsonEditor';
 import { JsonObject } from '../utils/JsonObject';
 import { PipelineAttributes as PipelineAttributesData } from '../models/PipelineAttributes';
 
+const pipelineAttributesToPipelineAttributesAndKeys = (
+  pipelineAttributes: PipelineAttributesData,
+): PipelineAttributesAndKeys => ({
+  attributes: pipelineAttributes,
+  stateKeys: Object.entries(pipelineAttributes.state).map(([k]) => k),
+});
+
 const buttonBaseSx = {
   width: '100%',
   display: 'flex',
@@ -23,7 +30,7 @@ const buttonBaseSx = {
 };
 
 export interface PipelineAttributesRef {
-  getDescription: () => string;
+  getPipelineAttributes: () => PipelineAttributesData;
 }
 
 export interface PipelineAttributesAndKeys {
@@ -32,33 +39,34 @@ export interface PipelineAttributesAndKeys {
 }
 
 export interface PipelienAttributesProps {
-  pipelineAttributesAndKeys: PipelineAttributesAndKeys;
-  setPipelineAttributesAndKeys: (
-    pipelineAttributesAndKeys: PipelineAttributesAndKeys,
-  ) => void;
-  onUnsave: () => void;
+  pipelineAttributes: PipelineAttributesData;
+  onChange: () => void;
 }
 
 const PipelineAttributes = React.forwardRef(
   (
-    {
-      pipelineAttributesAndKeys: { attributes, stateKeys },
-      setPipelineAttributesAndKeys,
-      onUnsave,
-    }: PipelienAttributesProps,
-    ref,
+    { pipelineAttributes, onChange }: PipelienAttributesProps,
+    ref: React.Ref<PipelineAttributesRef>,
   ) => {
+    const [pipelineAttributesAndKeys, setPipelineAttributesAndKeys] =
+      React.useState<PipelineAttributesAndKeys>(
+        pipelineAttributesToPipelineAttributesAndKeys(pipelineAttributes),
+      );
+
     const [stateOpened, setStateOpened] = React.useState(false);
     const [descriptionOpened, setDescriptionOpened] = React.useState(false);
 
     const rteRef = React.useRef<RichTextEditorRef>(null);
 
     const handleChangeState = (v: JsonObject, k?: string[]) => {
-      onUnsave();
       setPipelineAttributesAndKeys({
-        attributes: { ...attributes, state: v },
-        stateKeys: k!,
+        attributes: {
+          ...pipelineAttributesAndKeys.attributes,
+          state: v,
+        },
+        stateKeys: k ?? pipelineAttributesAndKeys.stateKeys,
       });
+      onChange();
     };
 
     const handleStateToggle = () => {
@@ -69,15 +77,40 @@ const PipelineAttributes = React.forwardRef(
       setDescriptionOpened((prev) => !prev);
     };
 
+    // effects
+
+    React.useEffect(() => {
+      setPipelineAttributesAndKeys(
+        pipelineAttributesToPipelineAttributesAndKeys(pipelineAttributes),
+      );
+    }, [pipelineAttributes]);
+
     React.useEffect(() => {
       if (!rteRef.current?.editor) return;
 
-      rteRef.current.editor.commands.setContent(attributes.description);
-    }, [attributes.description]);
+      rteRef.current.editor.commands.setContent(pipelineAttributes.description);
+    }, [pipelineAttributes.description]);
+
+    // imperative
 
     React.useImperativeHandle(ref, () => ({
-      getDescription: () =>
-        rteRef.current?.editor?.storage.markdown.getMarkdown() ?? '',
+      getPipelineAttributes: () => {
+        // lazy update description
+        const description: string | null =
+          rteRef.current?.editor?.storage.markdown.getMarkdown();
+
+        if (description === null) {
+          console.error('description is null');
+          return pipelineAttributesAndKeys.attributes;
+        }
+
+        const updatedAttributes: PipelineAttributesData = {
+          ...pipelineAttributesAndKeys.attributes,
+          description,
+        };
+
+        return updatedAttributes;
+      },
     }));
 
     return (
@@ -91,9 +124,9 @@ const PipelineAttributes = React.forwardRef(
           <Collapse in={stateOpened}>
             <Box sx={{ overflowX: 'auto' }} my={1}>
               <JsonEditor
-                value={attributes.state}
+                value={pipelineAttributesAndKeys.attributes.state}
                 onChange={(v, k) => handleChangeState(v as JsonObject, k)}
-                objectKeys={stateKeys}
+                objectKeys={pipelineAttributesAndKeys.stateKeys}
                 base
               />
             </Box>
@@ -110,8 +143,8 @@ const PipelineAttributes = React.forwardRef(
             <Box my={1}>
               <MarkdownEditor
                 ref={rteRef}
-                content={attributes.description}
-                onUpdate={onUnsave}
+                content={pipelineAttributesAndKeys.attributes.description}
+                onUpdate={onChange}
               />
             </Box>
           </Collapse>
