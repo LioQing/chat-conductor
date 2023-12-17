@@ -8,8 +8,8 @@ export interface ChatHistoryParams {
 export interface ChatHistory {
   id: number;
   user_message: string;
-  api_message: string;
-  clear_history: boolean;
+  resp_message: string;
+  exit_code: number;
   created_at: string;
 }
 

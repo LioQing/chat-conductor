@@ -4,7 +4,9 @@ import IconButton from '@mui/material/IconButton';
 import useTheme from '@mui/material/styles/useTheme';
 import { alpha } from '@mui/material/styles';
 import Tooltip from '@mui/material/Tooltip';
+import Switch from '@mui/material/Switch';
 import Divider from '@mui/material/Divider';
+import Typography from '@mui/material/Typography';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -44,6 +46,7 @@ import {
 } from '../models/PipelineAttributes';
 import useQuery from '../hooks/useQuery';
 import PipelineToolbar from '../components/PipelineToolbar';
+import useLocalStorage from '../hooks/useLocalStorage';
 
 const unsaveMessage =
   'You have unsaved changes. Are you sure you want to leave?';
@@ -99,6 +102,9 @@ function Pipeline() {
     return components?.find((c) => c.id === componentId) ?? null;
   }, [components, componentId]);
 
+  // chat states
+  const [markdown, setMarkdown] = useLocalStorage('Pipeline:markdown', true);
+
   // panels refs
   const toolbarRef = React.useRef<HTMLDivElement>(null);
   const inspectPipelineRef = React.useRef<InspectPipelineRef>(null);
@@ -139,6 +145,7 @@ function Pipeline() {
 
     const pipelineSaveRequest: PipelineSaveRequest = {
       name: newPipeline.name,
+      response: newPipelineAttributes.response,
       state: newPipelineAttributes.state,
       description: newPipelineAttributes.description,
       components: newComponents.map(
@@ -319,6 +326,7 @@ function Pipeline() {
           console.error('Pipeline attributes is null');
           navigate('/pipeline');
           return {
+            response: '',
             state: {},
             description: '',
           };
@@ -365,6 +373,13 @@ function Pipeline() {
   const handleUnsave = React.useCallback(() => {
     setSaveState('unsaved');
   }, []);
+
+  const handleMarkdownToggle = React.useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setMarkdown(e.target.checked);
+    },
+    [],
+  );
 
   // pipelines handlers
 
@@ -491,9 +506,14 @@ function Pipeline() {
   }, [pipeline]);
 
   const handleChatReceive = React.useCallback(() => {
-    updateComponents();
-    updatePipelineAttributes();
-  }, []);
+    if (!pipelineId) {
+      return;
+    }
+
+    syncPipelineAttributes(pipelineId);
+    syncPipelineComponentInstance(pipelineId!);
+    console.log('chat receive');
+  }, [pipelineId]);
 
   // effects
 
@@ -511,145 +531,197 @@ function Pipeline() {
 
   // components
 
-  const pipelinesPanel = (
-    <Panel
-      title="Pipeline"
-      titleSx={{ px: 3 }}
-      sx={{
-        width: pipeline ? undefined : 500,
-        height: pipeline ? editorHeight : 'fit-content',
-        px: 0,
-      }}
-      wrapper={<Box display="flex" flexDirection="column" maxHeight="100%" />}
-      trailing={
-        !pipeline ? (
-          <Tooltip title="New" placement="top">
-            <IconButton edge="end" onClick={handlePipelineNewClick}>
-              <AddCircleOutlineIcon />
-            </IconButton>
-          </Tooltip>
-        ) : undefined
-      }
-    >
-      {pipeline && components ? (
-        <InspectPipeline
-          ref={inspectPipelineRef}
-          pipeline={pipeline}
-          components={components}
-          component={component}
-          onPipelineChange={handlePipelineChange}
-          onComponentsChange={handleComponentsChange}
-          onComponentSelect={handleComponentSelect}
-          onComponentEnableToggle={handleComponentEnableToggle}
-          onComponentNew={handleComponentNewClick}
-          onComponentDelete={handleComponentDeleteClick}
-        />
-      ) : (
-        <PipelineList
-          pipelines={pipelines}
-          onPipelineSelect={handlePipelineSelect}
-          onPipelineRename={handlePipelineRename}
-          onPipelineDelete={handlePipelineDeleteClick}
-        />
-      )}
-    </Panel>
-  );
-
-  const toolbarComponent = (
-    <Panel paperRef={toolbarRef} sx={{ p: 1 }}>
-      <PipelineToolbar
-        pipeline={pipeline}
-        saveState={saveState}
-        onPipelineBack={handlePipelineBack}
-        onSave={handleSave}
-      />
-    </Panel>
-  );
-
-  const dividerComponent = (
-    <PanelResizeHandle>
-      <Box
-        p={0.5}
-        height="100%"
+  const pipelinesPanel = React.useMemo(
+    () => (
+      <Panel
+        title="Pipeline"
+        titleSx={{ px: 3 }}
         sx={{
-          '> *': {
-            backgroundColor: alpha(
-              theme.palette.divider,
-              theme.palette.action.focusOpacity,
-            ),
-          },
-          '&:hover': {
-            '> *': {
-              backgroundColor: alpha(
-                theme.palette.divider,
-                theme.palette.action.focusOpacity * 1.5,
-              ),
-            },
-          },
-          '&:active': {
-            '> *': {
-              backgroundColor: alpha(
-                theme.palette.divider,
-                theme.palette.action.disabledOpacity,
-              ),
-            },
-          },
+          width: pipeline ? undefined : 500,
+          height: pipeline ? editorHeight : 'fit-content',
+          px: 0,
         }}
+        wrapper={<Box display="flex" flexDirection="column" maxHeight="100%" />}
+        trailing={
+          !pipeline ? (
+            <Tooltip title="New" placement="top">
+              <IconButton edge="end" onClick={handlePipelineNewClick}>
+                <AddCircleOutlineIcon />
+              </IconButton>
+            </Tooltip>
+          ) : undefined
+        }
       >
-        <Divider orientation="vertical" />
-      </Box>
-    </PanelResizeHandle>
+        {pipeline && components ? (
+          <InspectPipeline
+            ref={inspectPipelineRef}
+            pipeline={pipeline}
+            components={components}
+            component={component}
+            onPipelineChange={handlePipelineChange}
+            onComponentsChange={handleComponentsChange}
+            onComponentSelect={handleComponentSelect}
+            onComponentEnableToggle={handleComponentEnableToggle}
+            onComponentNew={handleComponentNewClick}
+            onComponentDelete={handleComponentDeleteClick}
+          />
+        ) : (
+          <PipelineList
+            pipelines={pipelines}
+            onPipelineSelect={handlePipelineSelect}
+            onPipelineRename={handlePipelineRename}
+            onPipelineDelete={handlePipelineDeleteClick}
+          />
+        )}
+      </Panel>
+    ),
+    [
+      pipeline,
+      components,
+      component,
+      pipelines,
+      handlePipelineNewClick,
+      handlePipelineSelect,
+      handlePipelineRename,
+      handlePipelineDeleteClick,
+      handlePipelineChange,
+      handleComponentsChange,
+      handleComponentSelect,
+      handleComponentEnableToggle,
+      handleComponentNewClick,
+      handleComponentDeleteClick,
+    ],
   );
 
-  const pipelineEditorComponent = (
-    <>
-      <ResizablePanel
-        id="editor"
-        order={2}
-        collapsible
-        style={resizablePanelStyle}
-      >
-        <Panel
-          title={component ? 'Component Editor' : 'Pipeline Attributes Editor'}
-          titleSx={{ mx: 3 }}
-          wrapper={
-            <Box
-              display="flex"
-              flexDirection="column"
-              height={editorHeight - 24 - 8}
+  const toolbarComponent = React.useMemo(
+    () => (
+      <Panel paperRef={toolbarRef} sx={{ p: 1 }}>
+        <PipelineToolbar
+          pipeline={pipeline}
+          saveState={saveState}
+          onPipelineBack={handlePipelineBack}
+          onSave={handleSave}
+        />
+      </Panel>
+    ),
+    [pipeline, saveState, handlePipelineBack, handleSave],
+  );
+
+  const dividerComponent = React.useMemo(
+    () => (
+      <PanelResizeHandle>
+        <Box
+          p={0.5}
+          height="100%"
+          sx={{
+            '> *': {
+              backgroundColor: alpha(
+                theme.palette.divider,
+                theme.palette.action.focusOpacity,
+              ),
+            },
+            '&:hover': {
+              '> *': {
+                backgroundColor: alpha(
+                  theme.palette.divider,
+                  theme.palette.action.focusOpacity * 1.5,
+                ),
+              },
+            },
+            '&:active': {
+              '> *': {
+                backgroundColor: alpha(
+                  theme.palette.divider,
+                  theme.palette.action.disabledOpacity,
+                ),
+              },
+            },
+          }}
+        >
+          <Divider orientation="vertical" />
+        </Box>
+      </PanelResizeHandle>
+    ),
+    [],
+  );
+
+  const pipelineEditorComponent = React.useMemo(
+    () => (
+      <>
+        <ResizablePanel
+          id="editor"
+          order={2}
+          collapsible
+          style={resizablePanelStyle}
+        >
+          <Panel
+            title={
+              component ? 'Component Editor' : 'Pipeline Attributes Editor'
+            }
+            titleSx={{ mx: 3 }}
+            wrapper={
+              <Box
+                display="flex"
+                flexDirection="column"
+                height={editorHeight - 24 - 8}
+              />
+            }
+            sx={{ px: 0, height: editorHeight }}
+          >
+            <PipelineEditor
+              ref={pipelineEditorRef}
+              pipelineAttributes={pipelineAttributes}
+              markdown={markdown}
+              component={component}
+              onComponentChange={handleComponentChange}
+              onPipelineAttributesChange={handlePipelineAttributesChange}
             />
-          }
-          sx={{ px: 0, height: editorHeight }}
+          </Panel>
+        </ResizablePanel>
+        {dividerComponent}
+        <ResizablePanel
+          id="chat"
+          order={3}
+          collapsible
+          style={resizablePanelStyle}
         >
-          <PipelineEditor
-            ref={pipelineEditorRef}
-            pipelineAttributes={pipelineAttributes}
-            component={component}
-            onComponentChange={handleComponentChange}
-            onPipelineAttributesChange={handlePipelineAttributesChange}
-          />
-        </Panel>
-      </ResizablePanel>
-      {dividerComponent}
-      <ResizablePanel
-        id="chat"
-        order={3}
-        collapsible
-        style={resizablePanelStyle}
-      >
-        <Panel
-          title="Chat"
-          sx={{ height: editorHeight }}
-          wrapper={<Box display="flex" flexDirection="column" height="100%" />}
-        >
-          <Chat
-            pipeline={pipeline!}
-            onChatSend={handleChatSend}
-            onChatReceive={handleChatReceive}
-          />
-        </Panel>
-      </ResizablePanel>
-    </>
+          <Panel
+            title="Chat"
+            sx={{ height: editorHeight }}
+            wrapper={
+              <Box display="flex" flexDirection="column" height="100%" />
+            }
+            trailing={
+              <Box display="flex" flexDirection="row" alignItems="center">
+                <Box height={1} overflow="visible">
+                  <Switch checked={markdown} onChange={handleMarkdownToggle} />
+                </Box>
+                <Typography>Markdown</Typography>
+              </Box>
+            }
+          >
+            <Chat
+              pipeline={pipeline!}
+              markdown={markdown}
+              onChatSend={handleChatSend}
+              onChatReceive={handleChatReceive}
+            />
+          </Panel>
+        </ResizablePanel>
+      </>
+    ),
+    [
+      component,
+      markdown,
+      pipeline,
+      pipelineAttributes,
+      editorHeight,
+      handleComponentChange,
+      handlePipelineAttributesChange,
+      handleMarkdownToggle,
+      handleChatSend,
+      handleChatReceive,
+    ],
   );
 
   return (

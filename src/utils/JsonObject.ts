@@ -13,7 +13,7 @@ export interface JsonObject {
 export const isJsonObject = (value: any): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export interface JsonArray extends Array<JsonValue> {}
+export interface JsonArray<T extends JsonValue = JsonValue> extends Array<T> {}
 
 export const isJsonArray = (value: any): value is JsonArray =>
   Array.isArray(value);

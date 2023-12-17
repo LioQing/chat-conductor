@@ -2,6 +2,7 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
+import TuneIcon from '@mui/icons-material/Tune';
 import Divider from '@mui/material/Divider';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
@@ -162,12 +163,13 @@ const InspectPipeline = React.forwardRef(
           <Button
             variant="outlined"
             onClick={handlePipelineAttributesSelect}
+            startIcon={<TuneIcon />}
             sx={{
               width: '100%',
               my: 1,
             }}
           >
-            Attributes
+            <Typography>Attributes</Typography>
           </Button>
         </Box>
         <Divider sx={{ mx: 3 }} />

@@ -17,6 +17,7 @@ export interface PipelineEditorRef {
 export interface PipelineEditorProps {
   pipelineAttributes: PipelineAttributesData | null;
   component: ComponentInstance | null;
+  markdown: boolean;
   onComponentChange: () => void;
   onPipelineAttributesChange: () => void;
 }
@@ -26,6 +27,7 @@ const PipelineEditor = React.forwardRef(
     {
       pipelineAttributes,
       component,
+      markdown,
       onComponentChange,
       onPipelineAttributesChange,
     }: PipelineEditorProps,
@@ -47,6 +49,7 @@ const PipelineEditor = React.forwardRef(
           <ComponentAttributes
             ref={ComponentAttributesRef}
             component={component}
+            markdown={markdown}
             onChange={onComponentChange}
           />
         </Box>
@@ -57,6 +60,7 @@ const PipelineEditor = React.forwardRef(
           <PipelineAttributes
             ref={pipelineAttributesRef}
             pipelineAttributes={pipelineAttributes}
+            markdown={markdown}
             onChange={onPipelineAttributesChange}
           />
         </Box>

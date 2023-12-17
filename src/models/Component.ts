@@ -1,11 +1,12 @@
 import { ComposerAxiosRequest } from '../hooks/useComposerAxios';
+import { ArgumentObject } from '../utils/Argument';
 import { JsonObject } from '../utils/JsonObject';
 
 export interface Component {
   id: number;
   function_name: string;
   name: string;
-  arguments: JsonObject;
+  arguments: ArgumentObject;
   return_type: string;
   description: string;
   code: string;

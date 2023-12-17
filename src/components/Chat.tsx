@@ -28,6 +28,7 @@ const messageRowMaxRows = 3;
 
 export interface ChatProps {
   pipeline: Pipeline;
+  markdown: boolean;
   onChatSend: () => void;
   onChatReceive: () => void;
 }
@@ -43,7 +44,7 @@ interface Message {
   content: string;
 }
 
-function Chat({ pipeline, onChatSend, onChatReceive }: ChatProps) {
+function Chat({ pipeline, markdown, onChatSend, onChatReceive }: ChatProps) {
   const theme = useTheme();
   const [inputMessage, setInputMessage] = React.useState('');
   const [disabled, setDisabled] = React.useState(false);
@@ -78,7 +79,7 @@ function Chat({ pipeline, onChatSend, onChatReceive }: ChatProps) {
           {
             id: `assi${chatHistory.id}`,
             role: Role.Assistant,
-            content: chatHistory.api_message,
+            content: chatHistory.resp_message,
           },
           {
             id: `user${chatHistory.id}`,
@@ -102,7 +103,7 @@ function Chat({ pipeline, onChatSend, onChatReceive }: ChatProps) {
         {
           id: `assi${chatHistory.id}`,
           role: Role.Assistant,
-          content: chatHistory.api_message,
+          content: chatHistory.resp_message,
         },
         {
           id: `user${chatHistory.id}`,
@@ -145,7 +146,7 @@ function Chat({ pipeline, onChatSend, onChatReceive }: ChatProps) {
 
   React.useEffect(() => {
     fetchMoreChatPage();
-  }, [pipeline]);
+  }, [pipeline.id]);
 
   React.useEffect(() => {
     if (!moreChatPageClient.response) return;
@@ -165,7 +166,7 @@ function Chat({ pipeline, onChatSend, onChatReceive }: ChatProps) {
           {
             id: `assi${chatHistory.id}`,
             role: Role.Assistant,
-            content: chatHistory.api_message,
+            content: chatHistory.resp_message,
           },
           {
             id: `user${chatHistory.id}`,
@@ -191,7 +192,7 @@ function Chat({ pipeline, onChatSend, onChatReceive }: ChatProps) {
           {
             id: `assi${chatHistory.id}`,
             role: Role.Assistant,
-            content: chatHistory.api_message,
+            content: chatHistory.resp_message,
           },
           {
             id: `user${chatHistory.id}`,
@@ -468,15 +469,19 @@ function Chat({ pipeline, onChatSend, onChatReceive }: ChatProps) {
                       overflowWrap: 'break-word',
                     }}
                   >
-                    <MarkdownEditor
-                      readonly
-                      content={message.content}
-                      codeColor={
-                        message.role === Role.User
-                          ? theme.palette.primary.contrastText
-                          : undefined
-                      }
-                    />
+                    {markdown ? (
+                      <MarkdownEditor
+                        readonly
+                        content={message.content}
+                        codeColor={
+                          message.role === Role.User
+                            ? theme.palette.primary.contrastText
+                            : undefined
+                        }
+                      />
+                    ) : (
+                      <Typography>{message.content}</Typography>
+                    )}
                   </Paper>
                 </Box>
               ))}

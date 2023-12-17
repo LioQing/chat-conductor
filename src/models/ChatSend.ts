@@ -6,7 +6,6 @@ export interface ChatSendRequest {
 
 export interface ChatSend {
   user_message: string;
-  api_message: string;
 }
 
 export const postChatSend = (id: number, data: ChatSendRequest) =>

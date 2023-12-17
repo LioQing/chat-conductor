@@ -18,33 +18,39 @@ const MarkdownEditor = React.forwardRef(
   ) => {
     const theme = useTheme();
 
-    const ExtendCode = Code.extend({
-      addAttributes: () => ({
-        color: {
-          default: null,
-          renderHTML: () => ({
-            style: `color: ${codeColor ?? theme.palette.primary.main}`,
+    const CustomCode = React.useMemo(
+      () =>
+        Code.extend({
+          addAttributes: () => ({
+            color: {
+              default: null,
+              renderHTML: () => ({
+                style: `color: ${codeColor ?? theme.palette.primary.main}`,
+              }),
+            },
           }),
-        },
-      }),
-    });
+        }),
+      [codeColor, theme.palette.primary.main],
+    );
+
+    const CustomStarterKit = React.useMemo(
+      () =>
+        StarterKit.configure({
+          code: false,
+        }),
+      [],
+    );
+
+    const extensions = React.useMemo(
+      () => [CustomStarterKit, Markdown, CustomCode],
+      [CustomCode, CustomStarterKit],
+    );
 
     if (readonly) {
-      return (
-        <RichTextReadOnly
-          extensions={[StarterKit, Markdown, ExtendCode]}
-          {...props}
-        />
-      );
+      return <RichTextReadOnly extensions={extensions} {...props} />;
     }
 
-    return (
-      <RichTextEditor
-        ref={ref}
-        extensions={[StarterKit, Markdown, ExtendCode]}
-        {...props}
-      />
-    );
+    return <RichTextEditor ref={ref} extensions={extensions} {...props} />;
   },
 );
 

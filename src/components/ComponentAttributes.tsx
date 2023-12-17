@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React from 'react';
 import Box from '@mui/material/Box';
 import { useTheme } from '@mui/material/styles';
@@ -11,21 +12,48 @@ import ButtonBase from '@mui/material/ButtonBase';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Divider from '@mui/material/Divider';
+import Checkbox from '@mui/material/Checkbox';
 import Editor from '@monaco-editor/react';
 import { editor } from 'monaco-editor';
 import { type RichTextEditorRef } from 'mui-tiptap';
-import JsonEditor from './JsonEditor';
-import { JsonObject, JsonTypeName } from '../utils/JsonObject';
+import JsonEditor, {
+  JsonAddChange,
+  JsonChange,
+  JsonChangeType,
+  JsonEditChange,
+  JsonKeyChange,
+  JsonRemoveChange,
+  JsonReorderChange,
+  JsonTextField,
+} from './JsonEditor';
+import { JsonObject, JsonTypeName, isJsonObject } from '../utils/JsonObject';
 import { ComponentInstance } from '../models/ComponentInstance';
 import MarkdownEditor from './MarkdownEditor';
+import useLocalStorage from '../hooks/useLocalStorage';
+import {
+  Argument,
+  ArgumentObject,
+  fromDefault,
+  getArgument,
+  setArgument,
+  toDefault,
+} from '../utils/Argument';
 
-const componentToComponentAndKeys = (
+const componentToStates = (
   component: ComponentInstance,
-): ComponentAndKeys => ({
-  component,
-  stateKeys: Object.entries(component.state).map(([k]) => k),
-  argumentKeys: Object.entries(component.arguments).map(([k]) => k),
-});
+): ComponentAttributesStates => {
+  const argObject: JsonObject = {};
+  Object.entries(component.arguments).forEach(([k, v]) => {
+    argObject[k] = toDefault(v);
+  });
+
+  return {
+    component,
+    stateKeys: Object.entries(component.state).map(([k]) => k),
+    argObject,
+    argKeys: Object.entries(argObject).map(([k]) => k),
+  };
+};
 
 const buttonBaseSx = {
   width: '100%',
@@ -37,10 +65,11 @@ const buttonBaseSx = {
   pl: 0,
 };
 
-export interface ComponentAndKeys {
+interface ComponentAttributesStates {
   component: ComponentInstance;
   stateKeys: string[];
-  argumentKeys: string[];
+  argObject: JsonObject;
+  argKeys: string[];
 }
 
 export interface ComponentAttributesRef {
@@ -49,30 +78,44 @@ export interface ComponentAttributesRef {
 
 export interface ComponentAttributesProps {
   component: ComponentInstance;
+  markdown: boolean;
   onChange: () => void;
 }
 
 const ComponentAttributes = React.forwardRef(
   (
-    { component, onChange }: ComponentAttributesProps,
+    { component, markdown, onChange }: ComponentAttributesProps,
     ref: React.Ref<ComponentAttributesRef>,
   ) => {
     const theme = useTheme();
+    const [openedSections, setOpenedSections] = useLocalStorage<string[]>(
+      'ComponentAttributes:openedSections',
+      [],
+    );
 
-    const [componentAndKeys, setComponentAndKeys] =
-      React.useState<ComponentAndKeys>(componentToComponentAndKeys(component));
+    const [states, setStates] = React.useState<ComponentAttributesStates>(
+      componentToStates(component),
+    );
 
-    const [signatureOpened, setSignatureOpened] = React.useState(false);
-    const [stateOpened, setStateOpened] = React.useState(false);
-    const [descriptionOpened, setDescriptionOpened] = React.useState(false);
-    const [codeOpened, setCodeOpened] = React.useState(false);
+    const [signatureOpened, setSignatureOpened] = React.useState(
+      openedSections.includes('signature'),
+    );
+    const [stateOpened, setStateOpened] = React.useState(
+      openedSections.includes('state'),
+    );
+    const [descriptionOpened, setDescriptionOpened] = React.useState(
+      openedSections.includes('description'),
+    );
+    const [codeOpened, setCodeOpened] = React.useState(
+      openedSections.includes('code'),
+    );
 
     const rteRef = React.useRef<RichTextEditorRef>(null);
 
     const handleChangeName = (e: React.ChangeEvent<HTMLInputElement>) => {
-      setComponentAndKeys({
-        ...componentAndKeys,
-        component: { ...componentAndKeys.component, name: e.target.value },
+      setStates({
+        ...states,
+        component: { ...states.component, name: e.target.value },
       });
       onChange();
     };
@@ -80,30 +123,120 @@ const ComponentAttributes = React.forwardRef(
     const handleChangeFunctionName = (
       e: React.ChangeEvent<HTMLInputElement>,
     ) => {
-      setComponentAndKeys({
-        ...componentAndKeys,
+      setStates({
+        ...states,
         component: {
-          ...componentAndKeys.component,
+          ...states.component,
           function_name: e.target.value,
         },
       });
       onChange();
     };
 
-    const handleChangeArguments = (v: JsonObject, k?: string[]) => {
-      setComponentAndKeys({
-        ...componentAndKeys,
-        component: { ...componentAndKeys.component, arguments: v },
-        argumentKeys: k!,
-      });
+    const handleChangeArguments = (
+      v: JsonObject,
+      c: JsonChange,
+      k?: string[],
+    ) => {
+      if (k === undefined) {
+        console.error('k is undefined');
+        return;
+      }
+
+      const newStates = (() => {
+        const fakeBaseArg = {
+          enabled: false,
+          interpolated: '',
+          default: states.component.arguments,
+        };
+        const arg = getArgument(fakeBaseArg, c.accessor);
+
+        if (arg === undefined) {
+          console.error('arg is undefined');
+          return states;
+        }
+
+        const { default: def } = arg;
+
+        if (c.type === JsonChangeType.Add) {
+          const addChange = c as JsonAddChange;
+
+          if (addChange.key !== undefined) {
+            if (!isJsonObject(def)) {
+              console.error('def is not a JsonObject');
+              return states;
+            }
+
+            def[addChange.key] = fromDefault(addChange.value);
+          } else {
+            if (!Array.isArray(def)) {
+              console.error('def is not an array');
+              return states;
+            }
+
+            def.push(fromDefault(addChange.value));
+          }
+        } else if (c.type === JsonChangeType.Remove) {
+          const removeChange = c as JsonRemoveChange;
+
+          if (typeof removeChange.key === 'string') {
+            if (!isJsonObject(def)) {
+              console.error('def is not a JsonObject');
+              return states;
+            }
+
+            delete def[removeChange.key];
+          } else {
+            if (!Array.isArray(def)) {
+              console.error('def is not an array');
+              return states;
+            }
+
+            def.splice(removeChange.key, 1);
+          }
+        } else if (c.type === JsonChangeType.Edit) {
+          const editChange = c as JsonEditChange;
+
+          arg.default = editChange.value;
+        } else if (c.type === JsonChangeType.Reorder) {
+          const reorderChange = c as JsonReorderChange;
+
+          if (!Array.isArray(def)) {
+            console.error('def is not an array');
+            return states;
+          }
+
+          const [removed] = def.splice(reorderChange.from, 1);
+          def.splice(reorderChange.to, 0, removed);
+        } else if (c.type === JsonChangeType.Key) {
+          const keyChange = c as JsonKeyChange;
+
+          if (!isJsonObject(def)) {
+            console.error('def is not a JsonObject');
+            return states;
+          }
+
+          const value = def[keyChange.from];
+          delete def[keyChange.from];
+          def[keyChange.to] = value;
+        }
+
+        states.argKeys = k;
+        states.argObject = v;
+
+        return states;
+      })();
+
+      setStates(newStates);
+
       onChange();
     };
 
     const handleChangeReturnType = (e: any) => {
-      setComponentAndKeys({
-        ...componentAndKeys,
+      setStates({
+        ...states,
         component: {
-          ...componentAndKeys.component,
+          ...states.component,
           return_type: e.target.value,
         },
       });
@@ -111,20 +244,38 @@ const ComponentAttributes = React.forwardRef(
     };
 
     const handleChangeState = (v: JsonObject, k?: string[]) => {
-      setComponentAndKeys({
-        ...componentAndKeys,
-        component: { ...componentAndKeys.component, state: v },
-        stateKeys: k ?? componentAndKeys.stateKeys,
+      if (k === undefined) {
+        console.error('k is undefined');
+        return;
+      }
+
+      setStates({
+        ...states,
+        component: { ...states.component, state: v },
+        stateKeys: k,
+      });
+      onChange();
+    };
+
+    const handleChangeDescription = (
+      e: React.ChangeEvent<HTMLInputElement>,
+    ) => {
+      setStates({
+        ...states,
+        component: { ...states.component, description: e.target.value },
       });
       onChange();
     };
 
     const handleChangeCode = (v: string | undefined) => {
-      if (!v) return;
+      if (!v) {
+        console.error('v is undefined');
+        return;
+      }
 
-      setComponentAndKeys({
-        ...componentAndKeys,
-        component: { ...componentAndKeys.component, code: v },
+      setStates({
+        ...states,
+        component: { ...states.component, code: v },
       });
       onChange();
     };
@@ -146,7 +297,7 @@ const ComponentAttributes = React.forwardRef(
     };
 
     const handleGenerateFunctionSignature = () => {
-      const currCode = componentAndKeys.component.code;
+      const currCode = states.component.code;
 
       const jsonToPythonType: { [key: string]: string } = {
         null: 'None',
@@ -166,46 +317,38 @@ const ComponentAttributes = React.forwardRef(
         dictionary: 'dict',
       };
 
-      const def = `\n\ndef ${componentAndKeys.component.function_name}(`;
-      const args = Object.entries(
-        componentAndKeys.component.arguments ?? {},
-      ).map(([k, v]) => {
-        const type = jsonToPythonType[JsonTypeName(v)];
-        return `${k}: ${type}`;
-      });
+      const def = `\n\ndef ${states.component.function_name}(`;
+      const args = Object.entries(states.component.arguments ?? {}).map(
+        ([k, v]) => {
+          const type = jsonToPythonType[JsonTypeName(v)];
+          return `${k}: ${type}`;
+        },
+      );
       const argsStr = args.length > 2 ? args.join(',\n    ') : args.join(', ');
-      const returnType =
-        selectToPythonType[componentAndKeys.component.return_type];
+      const returnType = selectToPythonType[states.component.return_type];
       const returnStr = `${args.length > 2 ? '\n' : ''}) -> ${returnType}:`;
 
       const code = `${currCode}${def}${argsStr}${returnStr}`;
 
-      setComponentAndKeys({
-        ...componentAndKeys,
-        component: { ...componentAndKeys.component, code },
+      setStates({
+        ...states,
+        component: { ...states.component, code },
       });
-    };
-
-    // code editor
-
-    const handleEditorSizeChange =
-      (editor: editor.IStandaloneCodeEditor) => () => {
-        const height = Math.max(180, Math.min(540, editor.getContentHeight()));
-        editor.layout({
-          width: editor.getLayoutInfo().width,
-          height,
-        });
-      };
-
-    const handleEditorMount = (editor: editor.IStandaloneCodeEditor) => {
-      handleEditorSizeChange(editor)();
-      editor.onDidContentSizeChange(handleEditorSizeChange(editor));
     };
 
     // effect
 
     React.useEffect(() => {
-      setComponentAndKeys(componentToComponentAndKeys(component));
+      const newOpenedSections = [];
+      if (signatureOpened) newOpenedSections.push('signature');
+      if (stateOpened) newOpenedSections.push('state');
+      if (descriptionOpened) newOpenedSections.push('description');
+      if (codeOpened) newOpenedSections.push('code');
+      setOpenedSections(newOpenedSections);
+    }, [signatureOpened, stateOpened, descriptionOpened, codeOpened]);
+
+    React.useEffect(() => {
+      setStates(componentToStates(component));
     }, [component]);
 
     React.useEffect(() => {
@@ -220,15 +363,17 @@ const ComponentAttributes = React.forwardRef(
       getComponent: () => {
         // lazy update description
         const description: string | null =
-          rteRef.current?.editor?.storage.markdown.getMarkdown();
+          rteRef.current?.editor?.storage.markdown.getMarkdown() ??
+          states.component.description ??
+          null;
 
-        if (!description) {
-          console.error('description is empty');
-          return componentAndKeys.component;
+        if (description === null) {
+          console.error('description is null');
+          return states.component;
         }
 
         const updatedComponent = {
-          ...componentAndKeys.component,
+          ...states.component,
           description,
         };
 
@@ -236,11 +381,81 @@ const ComponentAttributes = React.forwardRef(
       },
     }));
 
+    // components
+    const interpolateArgumentComponentBuilder = (
+      accessor: (string | number)[],
+    ) => {
+      const getFakeBaseArg = (cak: ComponentAttributesStates): Argument => ({
+        enabled: false,
+        interpolated: '',
+        default: cak.component.arguments,
+      });
+
+      const fakeBaseArg = getFakeBaseArg(states);
+      const arg = getArgument(fakeBaseArg, accessor);
+
+      if (arg === undefined) {
+        console.error('arg is undefined');
+        return null;
+      }
+
+      const { enabled, interpolated, default: def } = arg;
+
+      return (
+        <Box display="flex" flexDirection="row" mx={1}>
+          <Checkbox
+            checked={enabled}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              const newArg = setArgument(fakeBaseArg, accessor, {
+                enabled: e.target.checked,
+                interpolated,
+                default: def,
+              });
+
+              const newCompnentAndKeys = {
+                ...states,
+                component: {
+                  ...states.component,
+                  arguments: newArg.default as ArgumentObject,
+                },
+              };
+
+              setStates(newCompnentAndKeys);
+            }}
+          />
+          <JsonTextField
+            value={interpolated}
+            onChange={(v: string) => {
+              const newArg = setArgument(fakeBaseArg, accessor, {
+                enabled,
+                interpolated: v,
+                default: def,
+              });
+
+              const newCompnentAndKeys = {
+                ...states,
+                component: {
+                  ...states.component,
+                  arguments: newArg.default as ArgumentObject,
+                },
+              };
+
+              setStates(newCompnentAndKeys);
+            }}
+            disabled={!enabled}
+            inputProps={{
+              placeholder: 'Interpolated',
+            }}
+          />
+        </Box>
+      );
+    };
+
     return (
       <Box display="flex" flexDirection="column" minHeight={0} mb={1}>
         <Box mb={1}>
           <TextField
-            value={componentAndKeys.component.name}
+            value={states.component.name}
             onChange={handleChangeName}
             label="Name"
             size="small"
@@ -249,10 +464,10 @@ const ComponentAttributes = React.forwardRef(
             sx={{ my: 1, flex: 1 }}
           />
           <Typography variant="body2">
-            Component ID: {componentAndKeys.component.component_id}
+            Component ID: {states.component.component_id}
           </Typography>
           <Typography variant="body2">
-            Created at: {componentAndKeys.component.created_at.toLocaleString()}
+            Created At: {new Date(states.component.created_at).toLocaleString()}
           </Typography>
         </Box>
         <Divider />
@@ -266,7 +481,7 @@ const ComponentAttributes = React.forwardRef(
             <Box display="flex" flexDirection="column" gap={1} my={1}>
               <Box display="flex" flexDirection="row" gap={2}>
                 <TextField
-                  value={componentAndKeys.component.function_name}
+                  value={states.component.function_name}
                   onChange={handleChangeFunctionName}
                   label="Function Name"
                   size="small"
@@ -275,7 +490,7 @@ const ComponentAttributes = React.forwardRef(
                   sx={{ my: 1, flex: 1 }}
                 />
                 <TextField
-                  value={componentAndKeys.component.return_type}
+                  value={states.component.return_type}
                   onChange={handleChangeReturnType}
                   label="Return Type"
                   size="small"
@@ -294,9 +509,11 @@ const ComponentAttributes = React.forwardRef(
               <Typography variant="body1">Parameters & Arguments</Typography>
               <Box sx={{ overflowX: 'auto' }}>
                 <JsonEditor
-                  value={componentAndKeys.component.arguments}
-                  onChange={(v, k) => handleChangeArguments(v as JsonObject, k)}
-                  objectKeys={componentAndKeys.argumentKeys}
+                  value={states.argObject}
+                  onChange={(v, c, k) =>
+                    handleChangeArguments(v as JsonObject, c, k)
+                  }
+                  objectKeys={states.argKeys}
                   base
                   jsonChoices={{
                     string: { name: 'String', default: 'Value' },
@@ -306,6 +523,18 @@ const ComponentAttributes = React.forwardRef(
                     object: { name: 'Dictionary', default: {} },
                     null: { name: 'None', default: null },
                   }}
+                  generateKey={(existingKeys: string[]) => {
+                    let key = 'key';
+                    if (existingKeys.includes(key)) {
+                      let i = 1;
+                      while (existingKeys.includes(`${key}_${i}`)) {
+                        i += 1;
+                      }
+                      key = `${key} ${i}`;
+                    }
+                    return key;
+                  }}
+                  endComponentBuilder={interpolateArgumentComponentBuilder}
                 />
               </Box>
               <Button
@@ -313,7 +542,7 @@ const ComponentAttributes = React.forwardRef(
                 onClick={handleGenerateFunctionSignature}
                 startIcon={<AutoAwesomeIcon />}
               >
-                Generate Function Signature
+                <Typography>Generate Function Signature</Typography>
               </Button>
             </Box>
           </Collapse>
@@ -328,9 +557,9 @@ const ComponentAttributes = React.forwardRef(
           <Collapse in={stateOpened}>
             <Box sx={{ overflowX: 'auto' }} my={1}>
               <JsonEditor
-                value={componentAndKeys.component.state}
-                onChange={(v, k) => handleChangeState(v as JsonObject, k)}
-                objectKeys={componentAndKeys.stateKeys}
+                value={states.component.state}
+                onChange={(v, c, k) => handleChangeState(v as JsonObject, k)}
+                objectKeys={states.stateKeys}
                 base
               />
             </Box>
@@ -345,11 +574,21 @@ const ComponentAttributes = React.forwardRef(
           </ButtonBase>
           <Collapse in={descriptionOpened}>
             <Box my={1}>
-              <MarkdownEditor
-                ref={rteRef}
-                content={componentAndKeys.component.description}
-                onUpdate={onChange}
-              />
+              {markdown ? (
+                <MarkdownEditor
+                  ref={rteRef}
+                  content={states.component.description}
+                  onUpdate={onChange}
+                />
+              ) : (
+                <TextField
+                  value={states.component.description}
+                  onChange={handleChangeDescription}
+                  variant="outlined"
+                  fullWidth
+                  multiline
+                />
+              )}
             </Box>
           </Collapse>
         </Box>
@@ -365,8 +604,8 @@ const ComponentAttributes = React.forwardRef(
               <Editor
                 theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
                 language="python"
-                value={componentAndKeys.component.code}
-                onMount={handleEditorMount}
+                value={states.component.code}
+                height="min(50vh, 540px)"
                 onChange={handleChangeCode}
               />
             </Box>
