@@ -227,8 +227,7 @@ const ComponentAttributes = React.forwardRef(
         return states;
       })();
 
-      setStates(newStates);
-
+      setStates({ ...newStates });
       onChange();
     };
 
@@ -320,7 +319,7 @@ const ComponentAttributes = React.forwardRef(
       const def = `\n\ndef ${states.component.function_name}(`;
       const args = Object.entries(states.component.arguments ?? {}).map(
         ([k, v]) => {
-          const type = jsonToPythonType[JsonTypeName(v)];
+          const type = jsonToPythonType[JsonTypeName(v.default)];
           return `${k}: ${type}`;
         },
       );

@@ -137,7 +137,6 @@ function Login() {
           flexGrow={1}
         >
           <Typography variant="h2">Chat Conductor</Typography>
-          <Typography variant="subtitle1">By Gennarrator A</Typography>
         </Box>
         <Box width={500}>
           <Panel>

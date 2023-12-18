@@ -33,8 +33,5 @@ export const JsonTypeName = (value: JsonValue): string => {
   if (Array.isArray(value)) {
     return 'array';
   }
-  if (typeof value === 'object') {
-    return 'object';
-  }
   return typeof value;
 };
