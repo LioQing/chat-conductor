@@ -41,13 +41,15 @@ function ApiIntegration({ pipelineId, open, onClose }: ApiIntegrationProps) {
     );
   };
 
+  const chatSendUrl = `${process.env.REACT_APP_COMPOSER_BASE_URL}/conductor/chat/send/${pipelineId}/`;
+
   const instructions = [
     {
       label: 'Curl',
       language: 'bash',
       copy:
         `curl -X 'POST' \\\n` +
-        `  'http://localhost:8001/conductor/chat/send/${pipelineId}/' \\\n` +
+        `  '${chatSendUrl}' \\\n` +
         `  -H 'accept: application/json' \\\n` +
         `  -H 'Authorization: Api-Key API_KEY' \\\n` +
         `  -H 'Content-Type: application/json' \\\n` +
@@ -60,7 +62,7 @@ function ApiIntegration({ pipelineId, open, onClose }: ApiIntegrationProps) {
         `import requests\n` +
         `\n` +
         `response = requests.post(\n` +
-        `    'http://localhost:8001/conductor/chat/send/${pipelineId}/',\n` +
+        `    '${chatSendUrl}',\n` +
         `    json={"user_message": "USER_MESSAGE"},\n` +
         `    headers={\n` +
         `        "Accept": "application/json",\n` +
@@ -75,7 +77,7 @@ function ApiIntegration({ pipelineId, open, onClose }: ApiIntegrationProps) {
       label: 'JavaScript',
       language: 'js',
       copy:
-        `fetch('http://localhost:8001/conductor/chat/send/${pipelineId}/', {\n` +
+        `fetch('${chatSendUrl}', {\n` +
         `  method: 'POST',\n` +
         `  headers: {\n` +
         `    'Accept': 'application/json',\n` +
