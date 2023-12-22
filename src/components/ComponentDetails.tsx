@@ -1,9 +1,8 @@
 import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import StarterKit from '@tiptap/starter-kit';
-import { RichTextEditor } from 'mui-tiptap';
 import { Component } from '../models/Component';
+import MarkdownEditor from './MarkdownEditor';
 
 export interface ComponentDetailsProps {
   component: Component;
@@ -21,11 +20,7 @@ function ComponentDetails({ component }: ComponentDetailsProps) {
         Created At: {new Date(component.created_at).toLocaleString()}
       </Typography>
       <Box py={1}>
-        <RichTextEditor
-          editable={false}
-          extensions={[StarterKit]}
-          content={component.description}
-        />
+        <MarkdownEditor readonly content={component.description} />
       </Box>
     </Box>
   );

@@ -7,7 +7,7 @@ import InputAdornment from '@mui/material/InputAdornment';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import Snackbar from '@mui/material/Snackbar';
+import Collapse from '@mui/material/Collapse';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import { alpha, useTheme } from '@mui/material';
@@ -72,8 +72,8 @@ function Chat({ pipeline, markdown, onChatSend, onChatReceive }: ChatProps) {
   React.useEffect(() => {
     if (!firstChatPageClient.response) return;
 
-    // replace messages if it is empty
-    if (messages.length === 0) {
+    // replace messages if it is empty (with only usertemp)
+    if (messages.length === 1) {
       setMessages(
         firstChatPageClient.response.data.flatMap((chatHistory) => [
           {
@@ -400,106 +400,104 @@ function Chat({ pipeline, markdown, onChatSend, onChatReceive }: ChatProps) {
   );
 
   return (
-    <>
-      <Box
-        display="flex"
-        flexDirection="column"
-        height="100%"
-        minHeight={0}
-        gap={1}
-      >
-        <Box
-          border="1px solid"
-          borderColor={theme.palette.primary.main}
-          borderRadius={1}
-          flexGrow={1}
-          overflow="hidden"
+    <Box display="flex" flexDirection="column" height="100%" minHeight={0}>
+      <Collapse in={chatErrorOpened}>
+        <Alert
+          onClose={() => setChatErrorOpened(false)}
+          severity="error"
+          sx={{ mb: 1 }}
         >
-          <Box
-            id="messages"
-            display="flex"
-            flexDirection="column-reverse"
-            height="100%"
-            sx={{ overflowY: 'scroll' }}
-          >
-            <Box position="relative" ref={messagesBottomRef} />
-            <InfiniteScroll
-              dataLength={messages.length}
-              next={fetchMoreChatPage}
-              hasMore={hasMore}
-              loader={
-                <Box
-                  display="flex"
-                  flexDirection="row"
-                  justifyContent="center"
-                  alignItems="center"
-                  height="100%"
-                >
-                  <CircularProgress />
-                </Box>
-              }
-              scrollableTarget="messages"
-              inverse
-              style={{
-                display: 'flex',
-                flexDirection: 'column-reverse',
-                padding: '8px',
-                gap: '8px',
-              }}
-            >
-              {messages.map((message: Message, i: number) => (
-                <Box
-                  key={i}
-                  display="flex"
-                  flexDirection="row"
-                  justifyContent={
-                    message.role === Role.User ? 'flex-end' : 'flex-start'
-                  }
-                >
-                  <Paper
-                    sx={{
-                      p: 1,
-                      maxWidth: 'calc(100% - 16px)',
-                      backgroundColor:
-                        message.role === Role.User ? 'primary.main' : undefined,
-                      color:
-                        message.role === Role.User
-                          ? theme.palette.primary.contrastText
-                          : theme.palette.text.primary,
-                      overflowWrap: 'break-word',
-                    }}
-                  >
-                    {markdown ? (
-                      <MarkdownEditor
-                        readonly
-                        content={message.content}
-                        codeColor={
-                          message.role === Role.User
-                            ? theme.palette.primary.contrastText
-                            : undefined
-                        }
-                      />
-                    ) : (
-                      <Typography>{message.content}</Typography>
-                    )}
-                  </Paper>
-                </Box>
-              ))}
-            </InfiniteScroll>
-          </Box>
-        </Box>
-        {messageRow}
-      </Box>
-      <Snackbar
-        open={chatErrorOpened}
-        autoHideDuration={6000}
-        onClose={() => setChatErrorOpened(false)}
-      >
-        <Alert onClose={() => setChatErrorOpened(false)} severity="error">
           {chatError}
         </Alert>
-      </Snackbar>
-    </>
+      </Collapse>
+      <Collapse in={messages.length === 1}>
+        <Alert severity="info" sx={{ mb: 1 }}>
+          First message response may be longer than usual.
+        </Alert>
+      </Collapse>
+      <Box
+        border="1px solid"
+        borderColor={theme.palette.primary.main}
+        borderRadius={1}
+        flexGrow={1}
+        overflow="hidden"
+        mb={1}
+      >
+        <Box
+          id="messages"
+          display="flex"
+          flexDirection="column-reverse"
+          height="100%"
+          sx={{ overflowY: 'scroll' }}
+        >
+          <Box position="relative" ref={messagesBottomRef} />
+          <InfiniteScroll
+            dataLength={messages.length}
+            next={fetchMoreChatPage}
+            hasMore={hasMore}
+            loader={
+              <Box
+                display="flex"
+                flexDirection="row"
+                justifyContent="center"
+                alignItems="center"
+                height="100%"
+              >
+                <CircularProgress />
+              </Box>
+            }
+            scrollableTarget="messages"
+            inverse
+            style={{
+              display: 'flex',
+              flexDirection: 'column-reverse',
+              padding: '8px',
+              gap: '8px',
+            }}
+          >
+            {messages.map((message: Message, i: number) => (
+              <Box
+                key={i}
+                display="flex"
+                flexDirection="row"
+                justifyContent={
+                  message.role === Role.User ? 'flex-end' : 'flex-start'
+                }
+              >
+                <Paper
+                  sx={{
+                    p: 1,
+                    maxWidth: 'calc(100% - 16px)',
+                    backgroundColor:
+                      message.role === Role.User ? 'primary.main' : undefined,
+                    color:
+                      message.role === Role.User
+                        ? theme.palette.primary.contrastText
+                        : theme.palette.text.primary,
+                    overflowWrap: 'break-word',
+                  }}
+                >
+                  {markdown ? (
+                    <MarkdownEditor
+                      readonly
+                      content={message.content}
+                      codeColor={
+                        message.role === Role.User
+                          ? theme.palette.primary.contrastText
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <Typography>{message.content}</Typography>
+                  )}
+                </Paper>
+              </Box>
+            ))}
+          </InfiniteScroll>
+        </Box>
+      </Box>
+      {messageRow}
+    </Box>
   );
 }
 

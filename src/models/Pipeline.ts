@@ -16,6 +16,9 @@ export const postPipelineNew = () =>
   ({
     url: '/conductor/pipeline/new/',
     method: 'post',
+    otherConfigs: {
+      timeout: 20_000, // 20s
+    },
   }) as ComposerAxiosRequest;
 
 export const deletePipelineDelete = (id: number) =>

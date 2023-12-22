@@ -173,7 +173,7 @@ const renderItem =
               </Tooltip>
               <Box width={8} />
               <ListItemText
-                primary={thisComponent.name}
+                primary={`${thisComponent.name} (${thisComponent.function_name})`}
                 sx={{ textAlign: 'left' }}
               />
               <Box flexGrow={1} />

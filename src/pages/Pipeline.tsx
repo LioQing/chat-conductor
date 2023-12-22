@@ -6,6 +6,7 @@ import { alpha } from '@mui/material/styles';
 import Tooltip from '@mui/material/Tooltip';
 import Switch from '@mui/material/Switch';
 import Divider from '@mui/material/Divider';
+import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { useNavigate } from 'react-router-dom';
@@ -762,7 +763,23 @@ function Pipeline() {
           width="100%"
           height="100%"
         >
-          {pipelinesPanel}
+          {pipelineNewClient.loading ? (
+            <Box
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
+              gap={2}
+              maxWidth="500px"
+            >
+              <CircularProgress />
+              <Typography>
+                Please wait while we create a container for you...
+              </Typography>
+              <Typography>This may take up to 20 seconds.</Typography>
+            </Box>
+          ) : (
+            pipelinesPanel
+          )}
         </Box>
       )}
     </Box>
