@@ -6,7 +6,6 @@ import {
   createRoutesFromElements,
   RouterProvider,
 } from 'react-router-dom';
-import { PythonProvider } from 'react-py';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { Settings as SettingsData, SettingsContext } from './contexts/Settings';
 import Pipeline from './pages/Pipeline';
@@ -19,7 +18,7 @@ import Scaffold from './components/Scaffold';
 import Index from './pages/Index';
 import useLocalStorage from './hooks/useLocalStorage';
 import Admin from './pages/Admin';
-import packages from './python/packages';
+import RTE from './pages/RTE';
 
 const baseTheme = {
   shape: {
@@ -40,7 +39,7 @@ const lightTheme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#ef5350',
+      main: '#c54c44',
     },
     secondary: {
       main: '#26a69a',
@@ -79,6 +78,9 @@ const router = createBrowserRouter(
         <Route path="account/" element={<Account />} />
         <Route path="settings/" element={<Settings />} />
         <Route path="admin/" element={<Admin />} />
+        {process.env.REACT_APP_DEBUG_MODE?.toLowerCase() === 'true' && (
+          <Route path="rte/" element={<RTE />} />
+        )}
       </Route>
       <Route path="/login/" element={<Login />} />
     </>,
@@ -98,9 +100,7 @@ function App() {
       )}
     >
       <ThemeProvider theme={settings.darkMode ? darkTheme : lightTheme}>
-        <PythonProvider packages={packages}>
-          <RouterProvider router={router} />
-        </PythonProvider>
+        <RouterProvider router={router} />
       </ThemeProvider>
     </SettingsContext.Provider>
   );

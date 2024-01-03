@@ -16,67 +16,83 @@ import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
-import {
-  Pipeline,
-  deletePipelineDelete,
-  getPipeline,
-} from '../models/Pipeline';
+import { Pipeline, deletePipelineDelete } from '../models/Pipeline';
 import useComposerAxios from '../hooks/useComposerAxios';
 import {
   PipelineRename,
   PipelineRenameRequest,
   putPipelineRename,
 } from '../models/PipelineRename';
-import useQuery from '../hooks/useQuery';
 
 export interface PipelineListProps {
-  setPipeline: (pipeline: Pipeline | null) => void;
+  pipelines: Pipeline[];
+  onPipelineSelect: (id: number) => void;
+  onPipelineRename: (id: number, name: string) => void;
+  onPipelineDelete: (id: number) => void;
 }
 
-function PipelineList({ setPipeline }: PipelineListProps) {
-  const query = useQuery();
-  const pipelinesClient = useComposerAxios<Pipeline[]>(getPipeline());
-  const pipelineDeleteClient = useComposerAxios<Pipeline[]>();
-  const pipelineRenameClient = useComposerAxios<
-    PipelineRename,
-    PipelineRenameRequest
-  >();
+function PipelineList({
+  pipelines,
+  onPipelineSelect,
+  onPipelineRename,
+  onPipelineDelete,
+}: PipelineListProps) {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [menuDialog, setMenuDialog] = React.useState<
     'Rename' | 'Delete' | null
   >(null);
   const [menuPipeline, setMenuPipeline] = React.useState<null | Pipeline>(null);
-  const [pipelines, setPipelines] = React.useState<Pipeline[]>([]);
 
-  const fetchPipelines = () => {
-    pipelinesClient.sendRequest();
-  };
+  // rename pipeline
+
+  const pipelineRenameClient = useComposerAxios<
+    PipelineRename,
+    PipelineRenameRequest
+  >();
+
+  const syncPipelineRename = React.useCallback(
+    (id: number, name: string) => {
+      pipelineRenameClient.sendRequest(putPipelineRename(id, { name }));
+    },
+    [pipelineRenameClient],
+  );
 
   React.useEffect(() => {
-    fetchPipelines();
-  }, []);
+    if (!pipelineRenameClient.response) return;
+
+    handleDialogClose();
+    onPipelineRename(
+      pipelineRenameClient.response.data.id,
+      pipelineRenameClient.response.data.name,
+    );
+  }, [pipelineRenameClient.response]);
+
+  // delete pipeline
+  const [lastDeletedId, setLastDeletedId] = React.useState<number | null>(null);
+  const pipelineDeleteClient = useComposerAxios();
+
+  const syncPipelineDelete = React.useCallback(
+    (id: number) => {
+      pipelineDeleteClient.sendRequest(deletePipelineDelete(id));
+      setLastDeletedId(id);
+    },
+    [pipelineDeleteClient],
+  );
 
   React.useEffect(() => {
-    if (!pipelinesClient.response) return;
+    if (!pipelineDeleteClient.response) return;
 
-    setPipelines(pipelinesClient.response.data);
+    handleDialogClose();
+    onPipelineDelete(lastDeletedId as number);
+  }, [pipelineDeleteClient.response]);
 
-    if (query.has('pipeline')) {
-      const pipelineIdParam = query.get('pipeline');
-      if (!pipelineIdParam) return;
+  React.useEffect(() => {
+    if (!pipelineDeleteClient.error) return;
+    console.error(pipelineDeleteClient.error);
+  }, [pipelineDeleteClient.error]);
 
-      const pipelineId = parseInt(pipelineIdParam, 10);
-      if (Number.isNaN(pipelineId)) return;
-
-      const pipeline = pipelines.find((p) => p.id === pipelineId);
-      if (!pipeline) return;
-
-      setPipeline(pipeline);
-    }
-  }, [pipelinesClient.response]);
-
-  const handleSelectPipeline = (pipeline: Pipeline) => {
-    setPipeline(pipeline);
+  const handleSelectPipeline = (id: number) => {
+    onPipelineSelect(id);
   };
 
   const handleMenu =
@@ -107,17 +123,8 @@ function PipelineList({ setPipeline }: PipelineListProps) {
     const newName = data.get('new-name');
     if (!newName) return;
 
-    pipelineRenameClient.sendRequest(
-      putPipelineRename(menuPipeline.id, { name: newName as string }),
-    );
+    syncPipelineRename(menuPipeline.id, newName as string);
   };
-
-  React.useEffect(() => {
-    if (!pipelineRenameClient.response) return;
-
-    handleDialogClose();
-    fetchPipelines();
-  }, [pipelineRenameClient.response]);
 
   const handleDelete = () => {
     handleMenuClose();
@@ -126,15 +133,8 @@ function PipelineList({ setPipeline }: PipelineListProps) {
 
   const handleDeleteConfirm = () => {
     if (!menuPipeline) return;
-    pipelineDeleteClient.sendRequest(deletePipelineDelete(menuPipeline.id));
+    syncPipelineDelete(menuPipeline.id);
   };
-
-  React.useEffect(() => {
-    if (pipelineDeleteClient.response === null) return;
-
-    handleDialogClose();
-    fetchPipelines();
-  }, [pipelineDeleteClient.response]);
 
   return (
     <List>
@@ -155,7 +155,7 @@ function PipelineList({ setPipeline }: PipelineListProps) {
           }
         >
           <ListItemButton
-            onClick={() => handleSelectPipeline(p)}
+            onClick={() => handleSelectPipeline(p.id)}
             sx={{ pl: 3 }}
           >
             <ListItemText primary={p.name} secondary={`ID: ${p.id}`} />

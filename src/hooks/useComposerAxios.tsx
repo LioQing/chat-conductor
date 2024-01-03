@@ -1,5 +1,5 @@
 import React, { Dispatch, SetStateAction } from 'react';
-import axios, { AxiosError, AxiosResponse } from 'axios';
+import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { useCookies } from 'react-cookie';
 import { useStateWithCallbackLazy } from 'use-state-with-callback';
 import { postTokenRefresh } from '../models/AuthTokenRefresh';
@@ -16,6 +16,7 @@ export interface ComposerAxiosRequest<
   body?: TBody;
   data?: TData;
   params?: TParams;
+  otherConfigs?: AxiosRequestConfig;
 }
 
 export interface ComposerAxiosClient<
@@ -24,6 +25,7 @@ export interface ComposerAxiosClient<
   TData extends object = {},
   TParams extends object = {},
 > {
+  request: ComposerAxiosRequest<TBody, TData, TParams> | null;
   response: AxiosResponse<TResponseData> | null;
   error: AxiosError | null;
   loading: boolean;
@@ -71,6 +73,7 @@ const useComposerAxios = <
           },
           data: request.data,
           params: request.params,
+          ...request.otherConfigs,
         })
         .then((res) => {
           setResponse(res);
@@ -117,6 +120,7 @@ const useComposerAxios = <
   );
 
   return {
+    request,
     response,
     error,
     loading,

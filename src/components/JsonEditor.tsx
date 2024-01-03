@@ -12,8 +12,9 @@ import IconButton from '@mui/material/IconButton';
 import Dialog from '@mui/material/Dialog';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import OutlinedInput from '@mui/material/OutlinedInput';
+import OutlinedInput, { OutlinedInputProps } from '@mui/material/OutlinedInput';
 import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
 import Tooltip from '@mui/material/Tooltip';
 import { alpha } from '@mui/material';
 import {
@@ -33,13 +34,81 @@ import {
   JsonArray,
 } from '../utils/JsonObject';
 
-interface JsonTextFieldProps {
-  type?: 'text' | 'number';
-  value: string | number;
-  onChange: (value: string) => void;
+export enum JsonChangeType {
+  Add = 'add',
+  Remove = 'remove',
+  Edit = 'edit',
+  Reorder = 'reorder',
+  Key = 'key',
 }
 
-function JsonTextField({ type, value, onChange }: JsonTextFieldProps) {
+export interface JsonChange {
+  type: JsonChangeType;
+  accessor: (string | number)[];
+}
+
+// only on object or array
+export interface JsonAddChange extends JsonChange {
+  type: JsonChangeType.Add;
+  key?: string;
+  value: JsonValue;
+}
+
+// only on object or array
+export interface JsonRemoveChange extends JsonChange {
+  type: JsonChangeType.Remove;
+  key: string | number;
+}
+
+// only on string, number, boolean
+export interface JsonEditChange extends JsonChange {
+  type: JsonChangeType.Edit;
+  value: string | number | boolean;
+}
+
+// only on array
+export interface JsonReorderChange extends JsonChange {
+  type: JsonChangeType.Reorder;
+  from: number;
+  to: number;
+}
+
+// only on object
+export interface JsonKeyChange extends JsonChange {
+  type: JsonChangeType.Key;
+  from: string;
+  to: string;
+}
+
+export interface JsonChoice {
+  name: string;
+  default: JsonValue;
+}
+
+export const DefaultJsonChoices: { [key: string]: JsonChoice } = {
+  string: { name: 'String', default: 'Value' },
+  number: { name: 'Number', default: 0 },
+  boolean: { name: 'Boolean', default: false },
+  array: { name: 'Array', default: [] },
+  object: { name: 'Object', default: {} },
+  null: { name: 'Null', default: null },
+};
+
+export interface JsonTextFieldProps {
+  type?: 'text' | 'number';
+  value: string | number;
+  onChange: (value: string, change: JsonChange) => void;
+  inputProps?: OutlinedInputProps;
+  disabled?: boolean;
+}
+
+export function JsonTextField({
+  type,
+  value,
+  onChange,
+  inputProps,
+  disabled,
+}: JsonTextFieldProps) {
   const [openString, setOpenString] = React.useState(false);
 
   const handleClickOpenString = () => {
@@ -53,7 +122,11 @@ function JsonTextField({ type, value, onChange }: JsonTextFieldProps) {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(e.target.value);
+    onChange(e.target.value, {
+      type: JsonChangeType.Edit,
+      accessor: [],
+      value: e.target.value,
+    } as JsonEditChange);
   };
 
   return (
@@ -63,19 +136,31 @@ function JsonTextField({ type, value, onChange }: JsonTextFieldProps) {
       type={type}
       size="small"
       autoComplete="new-password" // https://learn.microsoft.com/en-us/answers/questions/974921/edge-bug-autocomplete-off-still-displays-previousl
+      disabled={disabled}
       sx={{ width: '200px' }}
       endAdornment={
         typeof value === 'string' ? (
           <InputAdornment position="end">
-            <Tooltip title="Edit in Full" placement="left">
+            {disabled ? (
               <IconButton
                 onClick={handleClickOpenString}
                 edge="end"
                 size="small"
+                disabled
               >
                 <OpenInFullIcon fontSize="small" />
               </IconButton>
-            </Tooltip>
+            ) : (
+              <Tooltip title="Edit in Full" placement="left">
+                <IconButton
+                  onClick={handleClickOpenString}
+                  edge="end"
+                  size="small"
+                >
+                  <OpenInFullIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             <Dialog
               open={openString}
               onClose={handleCloseDialog}
@@ -88,23 +173,31 @@ function JsonTextField({ type, value, onChange }: JsonTextFieldProps) {
                 multiline
                 rows={10}
                 autoFocus
+                {...inputProps}
               />
             </Dialog>
           </InputAdornment>
         ) : undefined
       }
+      {...inputProps}
     />
   );
 }
 
 JsonTextField.defaultProps = {
   type: 'text',
+  inputProps: {},
+  disabled: false,
 };
 
 const renderItem =
   (
     value: JsonArray,
-    onChange: (value: JsonArray, objectKeys?: string[]) => void,
+    onChange: (
+      value: JsonArray,
+      change: JsonChange,
+      objectKeys?: string[],
+    ) => void,
     childrenObjectKeys: (string[] | null)[] | null,
     setChildrenObjectKeys: (
       childrenObjectKeys: (string[] | null)[] | null,
@@ -113,6 +206,12 @@ const renderItem =
     setHandleHovered: (handleHovered: boolean[]) => void,
     objectKeys: string[],
     removeButton: (k: string | number) => React.ReactNode,
+    startComponentBuilder: (accessor: (string | number)[]) => React.ReactNode,
+    endComponentBuilder: (accessor: (string | number)[]) => React.ReactNode,
+    afterRemoveButtonComponentBuilder: (
+      accessor: (string | number)[],
+    ) => React.ReactNode,
+    builderAccessor: (string | number)[],
   ) =>
   (
     provided: DraggableProvided,
@@ -164,17 +263,30 @@ const renderItem =
           <DragIndicatorIcon color="primary" />
         </Box>
         <Box>
-          {(isJsonObject(v) || isJsonArray(v)) && (
-            <Typography variant="body1">
-              {isJsonObject(v) ? '{' : isJsonArray(v) ? '[' : ''}
-            </Typography>
-          )}
           <Box display="flex" flexDirection="row" alignItems="center">
+            {(isJsonObject(v) || isJsonArray(v)) && (
+              <>
+                {startComponentBuilder?.(builderAccessor?.concat(i)!)}
+                <Typography variant="body1">
+                  {isJsonObject(v) ? '{' : isJsonArray(v) ? '[' : ''}
+                </Typography>
+              </>
+            )}
+          </Box>
+          <Box display="flex" flexDirection="row" alignItems="center">
+            {!(isJsonObject(v) || isJsonArray(v)) &&
+              startComponentBuilder?.(builderAccessor?.concat(i)!)}
             <JsonEditor
               value={v}
-              onChange={(w, childrenK) => {
+              onChange={(w, change, childrenK) => {
                 onChange(
                   value.map((x, j) => (j === i ? w : x)),
+                  {
+                    ...change,
+                    accessor: ([i] as (string | number)[]).concat(
+                      change.accessor,
+                    ),
+                  },
                   objectKeys,
                 );
                 if (childrenObjectKeys?.[i] && childrenK) {
@@ -186,8 +298,22 @@ const renderItem =
                 }
               }}
               objectKeys={childrenObjectKeys?.[i] ?? undefined}
+              startComponentBuilder={startComponentBuilder}
+              endComponentBuilder={endComponentBuilder}
+              afterRemoveButtonComponentBuilder={
+                afterRemoveButtonComponentBuilder
+              }
+              builderAccessor={builderAccessor?.concat(i)}
             />
-            {!(isJsonObject(v) || isJsonArray(v)) && removeButton(i)}
+            {!(isJsonObject(v) || isJsonArray(v)) && (
+              <>
+                {endComponentBuilder?.(builderAccessor?.concat(i)!)}
+                {removeButton(i)}
+                {afterRemoveButtonComponentBuilder?.(
+                  builderAccessor?.concat(i)!,
+                )}
+              </>
+            )}
           </Box>
           <Box display="flex" flexDirection="row" alignItems="center">
             {(isJsonObject(v) || isJsonArray(v)) && (
@@ -195,7 +321,11 @@ const renderItem =
                 <Typography variant="body1">
                   {isJsonObject(v) ? '}' : isJsonArray(v) ? ']' : ''}
                 </Typography>
+                {endComponentBuilder?.(builderAccessor?.concat(i)!)}
                 {removeButton(i)}
+                {afterRemoveButtonComponentBuilder?.(
+                  builderAccessor?.concat(i)!,
+                )}
               </>
             )}
           </Box>
@@ -206,7 +336,11 @@ const renderItem =
 
 interface JsonArrayEditorItemProps {
   value: JsonArray;
-  onChange: (value: JsonArray, objectKeys?: string[]) => void;
+  onChange: (
+    value: JsonArray,
+    change: JsonChange,
+    objectKeys?: string[],
+  ) => void;
   childrenObjectKeys: (string[] | null)[] | null;
   setChildrenObjectKeys: (
     childrenObjectKeys: (string[] | null)[] | null,
@@ -215,6 +349,12 @@ interface JsonArrayEditorItemProps {
   setHandleHovered: (handleHovered: boolean[]) => void;
   objectKeys: string[];
   removeButton: (k: string | number) => React.ReactNode;
+  startComponentBuilder: (accessor: (string | number)[]) => React.ReactNode;
+  endComponentBuilder: (accessor: (string | number)[]) => React.ReactNode;
+  afterRemoveButtonComponentBuilder: (
+    accessor: (string | number)[],
+  ) => React.ReactNode;
+  builderAccessor: (string | number)[];
   index: number;
 }
 
@@ -227,6 +367,10 @@ function JsonArrayEditorItem({
   setHandleHovered,
   objectKeys,
   removeButton,
+  startComponentBuilder,
+  endComponentBuilder,
+  afterRemoveButtonComponentBuilder,
+  builderAccessor,
   index,
 }: JsonArrayEditorItemProps) {
   return (
@@ -240,6 +384,10 @@ function JsonArrayEditorItem({
         setHandleHovered,
         objectKeys,
         removeButton,
+        startComponentBuilder,
+        endComponentBuilder,
+        afterRemoveButtonComponentBuilder,
+        builderAccessor,
       )}
     </Draggable>
   );
@@ -247,7 +395,11 @@ function JsonArrayEditorItem({
 
 interface JsonArrayEditorProps {
   value: JsonArray;
-  onChange: (value: JsonArray, objectKeys?: string[]) => void;
+  onChange: (
+    value: JsonArray,
+    change: JsonChange,
+    objectKeys?: string[],
+  ) => void;
   childrenObjectKeys: (string[] | null)[] | null;
   setChildrenObjectKeys: (
     childrenObjectKeys: (string[] | null)[] | null,
@@ -256,6 +408,12 @@ interface JsonArrayEditorProps {
   base: boolean;
   addButton: React.ReactNode;
   removeButton: (k: string | number) => React.ReactNode;
+  startComponentBuilder: (accessor: (string | number)[]) => React.ReactNode;
+  endComponentBuilder: (accessor: (string | number)[]) => React.ReactNode;
+  afterRemoveButtonComponentBuilder: (
+    accessor: (string | number)[],
+  ) => React.ReactNode;
+  builderAccessor: (string | number)[];
 }
 
 function JsonArrayEditor({
@@ -267,6 +425,10 @@ function JsonArrayEditor({
   base,
   addButton,
   removeButton,
+  startComponentBuilder,
+  endComponentBuilder,
+  afterRemoveButtonComponentBuilder,
+  builderAccessor,
 }: JsonArrayEditorProps) {
   const [handleHovered, setHandleHovered] = React.useState(
     Array(value.length).fill(false),
@@ -299,7 +461,16 @@ function JsonArrayEditor({
       result.destination.index,
     );
 
-    onChange(newValue, objectKeys);
+    onChange(
+      newValue,
+      {
+        type: JsonChangeType.Reorder,
+        accessor: [],
+        from: result.source.index,
+        to: result.destination.index,
+      } as JsonReorderChange,
+      objectKeys,
+    );
   };
 
   return (
@@ -317,6 +488,10 @@ function JsonArrayEditor({
               setHandleHovered,
               objectKeys,
               removeButton,
+              startComponentBuilder,
+              endComponentBuilder,
+              afterRemoveButtonComponentBuilder,
+              builderAccessor,
             ),
           [value, onChange],
         )}
@@ -343,6 +518,12 @@ function JsonArrayEditor({
                 setHandleHovered={setHandleHovered}
                 objectKeys={objectKeys}
                 removeButton={removeButton}
+                startComponentBuilder={startComponentBuilder}
+                endComponentBuilder={endComponentBuilder}
+                afterRemoveButtonComponentBuilder={
+                  afterRemoveButtonComponentBuilder
+                }
+                builderAccessor={builderAccessor}
                 index={index}
               />
             ))}
@@ -357,12 +538,35 @@ function JsonArrayEditor({
 
 export interface JsonEditorProps {
   value: JsonValue;
-  onChange: (value: JsonValue, objectKeys?: string[]) => void;
+  onChange: (
+    value: JsonValue,
+    change: JsonChange,
+    objectKeys?: string[],
+  ) => void;
   objectKeys?: string[];
   base?: boolean;
+  jsonChoices?: { [key: string]: JsonChoice };
+  generateKey?: (existingKeys: string[]) => string;
+  startComponentBuilder?: (accessor: (string | number)[]) => React.ReactNode;
+  endComponentBuilder?: (accessor: (string | number)[]) => React.ReactNode;
+  afterRemoveButtonComponentBuilder?: (
+    accessor: (string | number)[],
+  ) => React.ReactNode;
+  builderAccessor?: (string | number)[];
 }
 
-function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
+function JsonEditor({
+  value,
+  onChange,
+  objectKeys,
+  base,
+  jsonChoices,
+  generateKey,
+  startComponentBuilder,
+  endComponentBuilder,
+  afterRemoveButtonComponentBuilder,
+  builderAccessor,
+}: JsonEditorProps) {
   const theme = useTheme();
   const [addMenu, setAddMenu] = React.useState(false);
 
@@ -406,26 +610,42 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
     delete value[old];
     const newV = { ...value, [k]: v };
     const newObjectKeys = objectKeys?.map((y) => (y === old ? k : y));
-    onChange(newV, newObjectKeys);
+    onChange(
+      newV,
+      {
+        type: JsonChangeType.Key,
+        accessor: [],
+        from: old,
+        to: k,
+      } as JsonKeyChange,
+      newObjectKeys,
+    );
   };
 
   const handleAdd = (v: JsonValue) => {
     if (isJsonObject(value)) {
-      const key = 'Key';
-      if (objectKeys?.includes(key)) {
-        let i = 1;
-        while (objectKeys.includes(`${key} ${i}`)) {
-          i += 1;
-        }
-        onChange({ ...value, [`${key} ${i}`]: v }, [
-          ...(objectKeys ?? []),
-          `${key} ${i}`,
-        ]);
-      } else {
-        onChange({ ...value, [key]: v }, [...(objectKeys ?? []), key]);
-      }
+      const key = generateKey!(objectKeys ?? []);
+
+      onChange(
+        { ...value, [key]: v },
+        {
+          type: JsonChangeType.Add,
+          accessor: [],
+          key,
+          value: v,
+        } as JsonAddChange,
+        [...(objectKeys ?? []), key],
+      );
     } else if (isJsonArray(value)) {
-      onChange([...value, v], objectKeys);
+      onChange(
+        [...value, v],
+        {
+          type: JsonChangeType.Add,
+          accessor: [],
+          value: v,
+        } as JsonAddChange,
+        objectKeys,
+      );
     }
 
     setAddMenu(false);
@@ -436,12 +656,36 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
       const newValue = { ...value };
       delete newValue[k];
       const newObjectKeys = objectKeys?.filter((x) => x !== k);
-      onChange(newValue, newObjectKeys);
+      onChange(
+        newValue,
+        {
+          type: JsonChangeType.Remove,
+          accessor: [],
+          key: k,
+        } as JsonRemoveChange,
+        newObjectKeys,
+      );
     } else if (isJsonArray(value)) {
       const newValue = [...value];
       newValue.splice(k as number, 1);
-      onChange(newValue, objectKeys);
+      onChange(
+        newValue,
+        {
+          type: JsonChangeType.Remove,
+          accessor: [],
+          key: k,
+        } as JsonRemoveChange,
+        objectKeys,
+      );
     }
+  };
+
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(e.target.checked, {
+      type: JsonChangeType.Edit,
+      accessor: [],
+      value: e.target.checked,
+    } as JsonEditChange);
   };
 
   const addButtons = (
@@ -449,6 +693,7 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
       <Button
         variant="outlined"
         onClick={() => setAddMenu(!addMenu)}
+        startIcon={<AddIcon />}
         sx={{
           backgroundColor: addMenu
             ? alpha(
@@ -458,16 +703,15 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
             : undefined,
         }}
       >
-        Add
+        <Typography>Add</Typography>
       </Button>
       <Collapse in={addMenu}>
         <ButtonGroup orientation="vertical" variant="contained" fullWidth>
-          <Button onClick={() => handleAdd('Value')}>String</Button>
-          <Button onClick={() => handleAdd(0)}>Number</Button>
-          <Button onClick={() => handleAdd(false)}>Boolean</Button>
-          <Button onClick={() => handleAdd([])}>Array</Button>
-          <Button onClick={() => handleAdd({})}>Object</Button>
-          <Button onClick={() => handleAdd(null)}>Null</Button>
+          {Object.entries(jsonChoices as object).map(([k, v]) => (
+            <Button key={k} onClick={() => handleAdd(v.default)}>
+              {v.name}
+            </Button>
+          ))}
         </ButtonGroup>
       </Collapse>
     </>
@@ -486,22 +730,17 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
       {typeof value === 'string' ? (
         <JsonTextField
           value={value}
-          onChange={(v) => onChange(v, objectKeys)}
+          onChange={(v, c) => onChange(v, c, objectKeys)}
         />
       ) : typeof value === 'number' ? (
         <JsonTextField
           type="number"
           value={value}
-          onChange={(v) => onChange(Number(v), objectKeys)}
+          onChange={(v, c) => onChange(Number(v), c, objectKeys)}
         />
       ) : typeof value === 'boolean' ? (
         <FormControlLabel
-          control={
-            <Checkbox
-              checked={value}
-              onChange={(e) => onChange(e.target.checked, objectKeys)}
-            />
-          }
+          control={<Checkbox checked={value} onChange={handleCheckboxChange} />}
           label={String(value)}
           sx={{ px: 1 }}
         />
@@ -520,8 +759,9 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
                   value={k}
                   onChange={(v) => handleChangeObjectKey(k, v)}
                 />
+                <Typography variant="body1">:</Typography>
+                {startComponentBuilder?.(builderAccessor?.concat(k)!)}
                 <Typography variant="body1">
-                  :
                   {isJsonObject(value[k])
                     ? '{'
                     : isJsonArray(value[k])
@@ -532,8 +772,17 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
                   <>
                     <JsonEditor
                       value={value[k]}
-                      onChange={(w, childrenK) => {
-                        onChange({ ...value, [k]: w }, objectKeys);
+                      onChange={(w, change, childrenK) => {
+                        onChange(
+                          { ...value, [k]: w },
+                          {
+                            ...change,
+                            accessor: ([k] as (string | number)[]).concat(
+                              change.accessor,
+                            ),
+                          },
+                          objectKeys,
+                        );
                         if (childrenObjectKeys?.[i] && childrenK) {
                           setChildrenObjectKeys(
                             childrenObjectKeys?.map((x, j) =>
@@ -543,8 +792,19 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
                         }
                       }}
                       objectKeys={childrenObjectKeys![i] ?? undefined}
+                      jsonChoices={jsonChoices}
+                      startComponentBuilder={startComponentBuilder}
+                      endComponentBuilder={endComponentBuilder}
+                      afterRemoveButtonComponentBuilder={
+                        afterRemoveButtonComponentBuilder
+                      }
+                      builderAccessor={builderAccessor?.concat(k)}
                     />
+                    {endComponentBuilder?.(builderAccessor?.concat(k)!)}
                     {removeButton(k)}
+                    {afterRemoveButtonComponentBuilder?.(
+                      builderAccessor?.concat(k)!,
+                    )}
                   </>
                 )}
               </Box>
@@ -552,8 +812,17 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
                 <>
                   <JsonEditor
                     value={value[k]}
-                    onChange={(w, childrenK) => {
-                      onChange({ ...value, [k]: w }, objectKeys);
+                    onChange={(w, change, childrenK) => {
+                      onChange(
+                        { ...value, [k]: w },
+                        {
+                          ...change,
+                          accessor: ([k] as (string | number)[]).concat(
+                            change.accessor,
+                          ),
+                        },
+                        objectKeys,
+                      );
                       if (childrenObjectKeys?.[i] && childrenK) {
                         setChildrenObjectKeys(
                           childrenObjectKeys?.map((x, j) =>
@@ -563,6 +832,13 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
                       }
                     }}
                     objectKeys={childrenObjectKeys![i] ?? undefined}
+                    jsonChoices={jsonChoices}
+                    startComponentBuilder={startComponentBuilder}
+                    endComponentBuilder={endComponentBuilder}
+                    afterRemoveButtonComponentBuilder={
+                      afterRemoveButtonComponentBuilder
+                    }
+                    builderAccessor={builderAccessor?.concat(k)}
                   />
                   <Box display="flex" flexDirection="row" alignItems="center">
                     <Typography variant="body1">
@@ -572,7 +848,11 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
                         ? ']'
                         : ''}
                     </Typography>
+                    {endComponentBuilder?.(builderAccessor?.concat(k)!)}
                     {removeButton(k)}
+                    {afterRemoveButtonComponentBuilder?.(
+                      builderAccessor?.concat(k)!,
+                    )}
                   </Box>
                 </>
               )}
@@ -590,6 +870,10 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
           base={base!}
           addButton={addButtons}
           removeButton={removeButton}
+          startComponentBuilder={startComponentBuilder!}
+          endComponentBuilder={endComponentBuilder!}
+          afterRemoveButtonComponentBuilder={afterRemoveButtonComponentBuilder!}
+          builderAccessor={builderAccessor!}
         />
       ) : (
         <Typography variant="body1">null</Typography>
@@ -601,6 +885,22 @@ function JsonEditor({ value, onChange, objectKeys, base }: JsonEditorProps) {
 JsonEditor.defaultProps = {
   objectKeys: [],
   base: false,
+  jsonChoices: DefaultJsonChoices,
+  generateKey: (existingKeys: string[]) => {
+    let key = 'Key';
+    if (existingKeys.includes(key)) {
+      let i = 1;
+      while (existingKeys.includes(`${key} ${i}`)) {
+        i += 1;
+      }
+      key = `${key} ${i}`;
+    }
+    return key;
+  },
+  startComponentBuilder: () => null,
+  endComponentBuilder: () => null,
+  afterRemoveButtonComponentBuilder: () => null,
+  builderAccessor: [],
 };
 
 export default JsonEditor;

@@ -1,16 +1,15 @@
 import React from 'react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import SaveIcon from '@mui/icons-material/Save';
 import useTheme from '@mui/material/styles/useTheme';
 import { alpha } from '@mui/material/styles';
 import Tooltip from '@mui/material/Tooltip';
-import TouchRipple from '@mui/material/ButtonBase/TouchRipple';
+import Switch from '@mui/material/Switch';
 import Divider from '@mui/material/Divider';
-import Checkbox from '@mui/material/Checkbox';
+import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import { useNavigate } from 'react-router-dom';
 import {
   PanelGroup,
   Panel as ResizablePanel,
@@ -25,139 +24,140 @@ import PipelineEditor, {
   PipelineEditorRef,
 } from '../components/PipelineEditor';
 import useContainerDimensions from '../hooks/useContainerDimensions';
-import useKey from '../hooks/useKey';
-import { Pipeline as PipelineModel, postPipelineNew } from '../models/Pipeline';
+import {
+  Pipeline as PipelineModel,
+  getPipelines,
+  postPipelineNew,
+} from '../models/Pipeline';
 import Chat from '../components/Chat';
 import {
   ComponentInstance,
   getComponentInstance,
 } from '../models/ComponentInstance';
 import Prompt from '../components/Prompt';
-import { JsonObject } from '../utils/JsonObject';
 import useComposerAxios from '../hooks/useComposerAxios';
 import {
   PipelineSaveComponentInstance,
   PipelineSaveRequest,
   patchPipelineSave,
 } from '../models/PipelineSave';
+import {
+  PipelineAttributes as PipelineAttributesModel,
+  getPipelineAttributes,
+} from '../models/PipelineAttributes';
+import useQuery from '../hooks/useQuery';
+import PipelineToolbar from '../components/PipelineToolbar';
+import useLocalStorage from '../hooks/useLocalStorage';
 
 const unsaveMessage =
   'You have unsaved changes. Are you sure you want to leave?';
 
+const resizablePanelStyle = {
+  margin: -1,
+  padding: 1,
+  height: 'calc(100% + 16px)',
+  width: 'calc(100% + 16px)',
+};
+
 function Pipeline() {
   const theme = useTheme();
-  const history = React.useMemo(() => window.history, []);
+  const query = useQuery();
+  const navigate = useNavigate();
   const { height: containerHeight } = useContainerDimensions();
-  const [runInBackend, setRunInBackend] = React.useState(false);
-  const [pipelineOpened, setPipelineOpened] = React.useState(false);
-  const [pipeline, setPipeline] = React.useState<PipelineModel | null>(null);
-  const [componentId, setComponentId] = React.useState<number | null>(null);
-  const [components, setComponents] = React.useState<ComponentInstance[]>([]);
-  const [mode, setMode] = React.useState<'code' | 'attr' | null>(null);
-  const [editorHeight, setEditorHeight] = React.useState(0);
-  const [saved, setSaved] = React.useState(true);
 
-  const saveRippleRef = React.useRef<any>(null);
-  const saveButtonRef = React.useRef<any>(null);
+  // local states
+  const [editorHeight, setEditorHeight] = React.useState(0);
+
+  // pipelines
+  const [pipelines, setPipelines] = React.useState<PipelineModel[]>([]);
+
+  // toolbar states
+  const [saveState, setSaveState] = React.useState<
+    'unsaved' | 'saved' | 'saving'
+  >('unsaved');
+
+  // inspect pipeline states
+  const [components, setComponents] = React.useState<
+    ComponentInstance[] | null
+  >(null);
+  const [pipelineId, setPipelineId] = React.useState<number | null>(null);
+
+  const pipeline = React.useMemo(() => {
+    if (pipelineId === null) {
+      return null;
+    }
+
+    return pipelines?.find((p) => p.id === pipelineId) ?? null;
+  }, [pipelines, pipelineId]);
+
+  // pipeline editor states
+  const [pipelineAttributes, setPipelineAttributes] =
+    React.useState<PipelineAttributesModel | null>(null);
+  const [componentId, setComponentId] = React.useState<number | null>(null);
+
+  const component = React.useMemo(() => {
+    if (componentId === null) {
+      return null;
+    }
+
+    return components?.find((c) => c.id === componentId) ?? null;
+  }, [components, componentId]);
+
+  // chat states
+  const [markdown, setMarkdown] = useLocalStorage('Pipeline:markdown', true);
+
+  // panels refs
   const toolbarRef = React.useRef<HTMLDivElement>(null);
   const inspectPipelineRef = React.useRef<InspectPipelineRef>(null);
   const pipelineEditorRef = React.useRef<PipelineEditorRef>(null);
 
-  const pipelineNewClient = useComposerAxios<PipelineModel>(postPipelineNew());
-  const pipelineComponentInstanceClient =
-    useComposerAxios<ComponentInstance[]>();
+  // save pipeline
   const pipelineSaveClient = useComposerAxios<{}, PipelineSaveRequest>();
 
-  React.useEffect(() => {
-    if (pipeline) {
-      setPipelineOpened(true);
-      pipelineComponentInstanceClient.sendRequest(
-        getComponentInstance(pipeline.id),
-      );
-      history.pushState(null, '', `/pipeline/?pipeline=${pipeline.id}`);
-    } else {
-      setPipelineOpened(false);
-      setMode(null);
-      setComponentId(null);
-      setComponents([]);
-      setSaved(true);
-      history.pushState(null, '', `/pipeline/`);
-    }
-  }, [pipeline]);
-
-  React.useEffect(() => {
-    if (!pipelineComponentInstanceClient.response) {
-      return;
-    }
-
-    const componentInstance = pipelineComponentInstanceClient.response.data;
-    setComponents(componentInstance);
-  }, [pipelineComponentInstanceClient.response]);
-
-  const handlePipelineRun = React.useCallback(() => {
-    if (!pipeline) return;
-
-    pipelineEditorRef.current?.setIsRunning(true);
-    pipelineComponentInstanceClient.sendRequest(
-      getComponentInstance(pipeline.id),
-    );
-    inspectPipelineRef.current?.onRun();
-  }, [pipelineComponentInstanceClient, pipeline]);
-
-  const handlePipelineBack = () => {
-    if (pipelineOpened && !saved) {
-      if (!window.confirm(unsaveMessage)) {
-        return;
-      }
-    }
-
-    setPipelineOpened(false);
-    setPipeline(null);
-  };
-
-  const handlePipelineNew = () => {
-    pipelineNewClient.sendRequest();
-  };
-
-  React.useEffect(() => {
-    if (!pipelineNewClient.response) return;
-
-    setPipeline(pipelineNewClient.response.data);
-  }, [pipelineNewClient.response]);
-
-  const handleSave = () => {
-    if (saved) {
-      return;
-    }
-
+  const syncPipelineSave = React.useCallback(() => {
     if (
       pipelineEditorRef.current === null ||
       inspectPipelineRef.current === null ||
       pipeline === null
     ) {
-      console.error('Pipeline editor or pipeline is null');
+      console.error(
+        'Saving without pipeline editor, inspect pipeline, or pipeline',
+      );
       return;
     }
 
-    pipelineEditorRef.current.setIsSaving(true);
-    const newComps = updateComponentsFromEditor();
+    setSaveState('saving');
+    const newComponents: ComponentInstance[] = updateComponents();
+    const newPipelines: PipelineModel[] = updatePipelines();
+    const newPipelineAttributes: PipelineAttributesModel =
+      updatePipelineAttributes();
 
-    const pstate = inspectPipelineRef.current.getPipelineState();
-    if (pstate === null) {
-      console.error('Pipeline state is null');
+    if (pipelineId === null) {
+      console.error('Saving without pipeline id');
+      return;
+    }
+
+    const newPipeline = newPipelines.find((p) => p.id === pipelineId);
+
+    if (newPipeline === undefined) {
+      console.error('Saving without pipeline');
       return;
     }
 
     const pipelineSaveRequest: PipelineSaveRequest = {
-      name: inspectPipelineRef.current.getPipelineName(),
-      state: pstate,
-      components: newComps.map(
+      name: newPipeline.name,
+      response: newPipelineAttributes.response,
+      state: newPipelineAttributes.state,
+      description: newPipelineAttributes.description,
+      components: newComponents.map(
         (c: ComponentInstance): PipelineSaveComponentInstance => ({
           id: c.id,
           order: c.order,
           is_enabled: c.is_enabled,
-          name: c.name,
           function_name: c.function_name,
+          name: c.name,
+          arguments: c.arguments,
+          return_type: c.return_type,
           description: c.description,
           code: c.code,
           state: c.state,
@@ -168,11 +168,11 @@ function Pipeline() {
     pipelineSaveClient.sendRequest(
       patchPipelineSave(pipeline.id, pipelineSaveRequest),
     );
-  };
+  }, [pipeline, pipelineSaveClient]);
 
   React.useEffect(() => {
     if (!pipelineSaveClient.response) return;
-    setSaved(true);
+    setSaveState('saved');
   }, [pipelineSaveClient.response]);
 
   React.useEffect(() => {
@@ -180,136 +180,346 @@ function Pipeline() {
     console.error(pipelineSaveClient.error);
   }, [pipelineSaveClient.error]);
 
-  const component = React.useMemo(
-    () =>
-      componentId !== null
-        ? components.find((c) => c.id === componentId) ?? null
-        : null,
-    [components, componentId],
+  // new pipeline
+  const pipelineNewClient = useComposerAxios<PipelineModel[]>(
+    postPipelineNew(),
   );
 
-  const handleUnsave = () => {
-    setSaved(false);
-  };
+  const syncPipelineNew = React.useCallback(() => {
+    pipelineNewClient.sendRequest();
+  }, [pipelineNewClient]);
 
-  const handleSetComponentsUnsave = (c: ComponentInstance[]) => {
-    setComponents(c);
-    handleUnsave();
-  };
+  React.useEffect(() => {
+    if (!pipelineNewClient.response) return;
+    setPipelines(pipelines.concat(pipelineNewClient.response.data));
+  }, [pipelineNewClient.response]);
 
-  const updateComponentsFromEditor = () => {
-    if (componentId === null) {
-      return [];
+  React.useEffect(() => {
+    if (!pipelineNewClient.error) return;
+    console.error(pipelineNewClient.error);
+  }, [pipelineNewClient.error]);
+
+  // pipeline component instance
+  const pipelineComponentInstanceClient =
+    useComposerAxios<ComponentInstance[]>();
+
+  const syncPipelineComponentInstance = React.useCallback(
+    (id: number) => {
+      pipelineComponentInstanceClient.sendRequest(getComponentInstance(id));
+    },
+    [pipelineComponentInstanceClient],
+  );
+
+  React.useEffect(() => {
+    if (!pipelineComponentInstanceClient.response) {
+      return;
     }
 
-    const currComp = components.find((c) => c.id === componentId);
+    setComponents(pipelineComponentInstanceClient.response.data);
+  }, [pipelineComponentInstanceClient.response]);
 
-    if (!currComp) {
-      return [];
+  React.useEffect(() => {
+    if (!pipelineComponentInstanceClient.error) {
+      return;
     }
 
-    const newComps = components.map((comp) => {
-      if (comp.id === currComp.id) {
-        const editorUpdate: {
-          name?: string;
-          function_name?: string;
-          description?: JsonObject;
-          code?: string;
-          state?: JsonObject;
-        } = {};
-        if (pipelineEditorRef.current?.getName() !== undefined) {
-          editorUpdate.name = pipelineEditorRef.current?.getName();
-        }
-        if (pipelineEditorRef.current?.getFunctionName() !== undefined) {
-          editorUpdate.function_name =
-            pipelineEditorRef.current?.getFunctionName();
-        }
-        if (pipelineEditorRef.current?.getDescription() !== undefined) {
-          editorUpdate.description =
-            pipelineEditorRef.current?.getDescription();
-        }
-        if (pipelineEditorRef.current?.getCode() !== undefined) {
-          editorUpdate.code = pipelineEditorRef.current?.getCode();
-        }
-        if (pipelineEditorRef.current?.getState() !== undefined) {
-          editorUpdate.state = pipelineEditorRef.current?.getState();
-        }
+    console.error(pipelineComponentInstanceClient.error);
+  }, [pipelineComponentInstanceClient.error]);
 
-        return {
-          ...comp,
-          ...editorUpdate,
-        } as ComponentInstance;
+  // pipelines
+  const pipelinesClient = useComposerAxios<PipelineModel[]>();
+
+  const syncPipelines = React.useCallback(() => {
+    pipelinesClient.sendRequest(getPipelines());
+  }, [pipelinesClient]);
+
+  React.useEffect(() => {
+    if (!pipelinesClient.response) {
+      return;
+    }
+
+    setPipelines(pipelinesClient.response.data);
+  }, [pipelinesClient.response]);
+
+  React.useEffect(() => {
+    if (!pipelinesClient.error) {
+      return;
+    }
+
+    console.error(pipelinesClient.error);
+  }, [pipelinesClient.error]);
+
+  // pipeline attributes
+  const pipelineAttributesClient = useComposerAxios<PipelineAttributesModel>();
+
+  const syncPipelineAttributes = React.useCallback(
+    (id: number) => {
+      pipelineAttributesClient.sendRequest(getPipelineAttributes(id));
+    },
+    [pipelineAttributesClient],
+  );
+
+  React.useEffect(() => {
+    if (!pipelineAttributesClient.response) {
+      return;
+    }
+
+    setPipelineAttributes(pipelineAttributesClient.response.data);
+  }, [pipelineAttributesClient.response]);
+
+  React.useEffect(() => {
+    if (!pipelineAttributesClient.error) {
+      return;
+    }
+
+    console.error(pipelineAttributesClient.error);
+  }, [pipelineAttributesClient.error]);
+
+  // routes
+  React.useEffect(() => {
+    if (query.get('pipeline') !== null) {
+      const pipelineId = parseInt(query.get('pipeline')!, 10);
+
+      syncPipelines();
+      setPipelineId(pipelineId);
+      syncPipelineComponentInstance(pipelineId);
+      syncPipelineAttributes(pipelineId);
+      setComponentId(null);
+      setSaveState('saved');
+    } else {
+      syncPipelines();
+      setPipelineId(null);
+      setComponents(null);
+      setPipelineAttributes(null);
+      setComponentId(null);
+    }
+  }, [query]);
+
+  // updators
+
+  const updatePipelines = React.useCallback((): PipelineModel[] => {
+    const newPipeline: PipelineModel | null =
+      inspectPipelineRef.current?.getPipeline() ?? null;
+
+    if (newPipeline === null) {
+      return pipelines;
+    }
+
+    const newPipelines: PipelineModel[] = pipelines.map((p) => {
+      if (p.id === newPipeline?.id) {
+        return newPipeline;
       }
 
-      return comp;
+      return p;
     });
 
-    setComponents(newComps);
+    setPipelines(newPipelines);
+    return newPipelines;
+  }, [pipelines, pipeline]);
 
-    return newComps;
-  };
+  const updatePipelineAttributes =
+    React.useCallback((): PipelineAttributesModel => {
+      const newPipelineAttributes: PipelineAttributesModel | null =
+        pipelineEditorRef.current?.getPipelineAttributes() ?? null;
 
-  const handleSetComponent = (c: ComponentInstance | null) => {
-    if (componentId !== null && c) {
-      updateComponentsFromEditor();
+      if (newPipelineAttributes === null) {
+        if (pipelineAttributes === null) {
+          console.error('Pipeline attributes is null');
+          navigate('/pipeline');
+          return {
+            response: '',
+            state: {},
+            description: '',
+          };
+        }
+        return pipelineAttributes;
+      }
+
+      setPipelineAttributes(newPipelineAttributes);
+      return newPipelineAttributes;
+    }, [pipelineAttributes]);
+
+  const updateComponents = React.useCallback(() => {
+    let newComponents: ComponentInstance[] | null =
+      inspectPipelineRef.current?.getComponents() ?? null;
+    const newComponent: ComponentInstance | null =
+      pipelineEditorRef.current?.getComponent() ?? null;
+
+    if (newComponents === null) {
+      if (components === null) {
+        console.error('Components is null');
+        navigate('/pipeline');
+        return [];
+      }
+
+      newComponents = components;
     }
-    setComponentId(c?.id ?? null);
-    // No need to unsave because this is only called when component is selected
-  };
 
-  const handleSetRunInBackend = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setRunInBackend(e.target.checked);
-  };
+    if (newComponent != null) {
+      newComponents = newComponents.map((c) => {
+        if (c.id === newComponent.id) {
+          return newComponent;
+        }
 
-  useKey('ctrls', (e: KeyboardEvent) => {
-    e.preventDefault();
-    const rect = saveButtonRef.current?.getBoundingClientRect();
-    saveRippleRef.current?.start(
-      {
-        clientX: rect.left + rect.width / 2,
-        clientY: rect.top + rect.height / 2,
-      },
-      // when center is true, the ripple doesn't travel to the border of the container
-      { center: false },
-    );
-    setTimeout(() => saveRippleRef.current.stop({}), 80);
-    handleSave();
-  });
+        return c;
+      });
+    }
 
-  const toolbar = (
-    <Panel paperRef={toolbarRef} sx={{ p: 1 }}>
-      <Box display="flex" flexDirection="row">
-        <Tooltip title="Back" placement="top">
-          <IconButton
-            onClick={handlePipelineBack}
-            sx={{
-              visibility: pipelineOpened ? 'visible' : 'hidden',
-              opacity: pipelineOpened ? 1 : 0,
-              transition: theme.transitions.create('all'),
-            }}
-          >
-            <ArrowBackIcon />
-          </IconButton>
-        </Tooltip>
-        <Box flexGrow={1} />
-        <Tooltip title="Save" placement="top">
-          <Box>
-            <IconButton
-              ref={saveButtonRef}
-              color={saved ? 'primary' : 'default'}
-              onClick={handleSave}
-            >
-              <SaveIcon />
-              <TouchRipple ref={saveRippleRef} center />
-            </IconButton>
-          </Box>
-        </Tooltip>
-      </Box>
-    </Panel>
+    setComponents(newComponents);
+    return newComponents;
+  }, [components, component]);
+
+  // trivial handlers
+
+  const handleUnsave = React.useCallback(() => {
+    setSaveState('unsaved');
+  }, []);
+
+  const handleMarkdownToggle = React.useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setMarkdown(e.target.checked);
+    },
+    [],
   );
 
+  // pipelines handlers
+
+  const handlePipelineSelect = React.useCallback((id: number) => {
+    navigate(`/pipeline?pipeline=${id}`);
+  }, []);
+
+  const handlePipelineRename = React.useCallback((id: number, name: string) => {
+    setPipelines((prev) =>
+      prev.map((p) => {
+        if (p.id === id) {
+          return {
+            ...p,
+            name,
+          };
+        }
+
+        return p;
+      }),
+    );
+  }, []);
+
+  const handlePipelineNewClick = React.useCallback(() => {
+    syncPipelineNew();
+  }, [syncPipelineNew]);
+
+  const handlePipelineDeleteClick = React.useCallback((id: number) => {
+    setPipelines((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
+  // toolbar handlers
+
+  const handlePipelineBack = React.useCallback(() => {
+    navigate('/pipeline');
+  }, [saveState]);
+
+  const handleSave = React.useCallback(() => {
+    syncPipelineSave();
+  }, [syncPipelineSave]);
+
+  // inspect pipeline handlers
+
+  const handlePipelineChange = React.useCallback(() => {
+    handleUnsave();
+  }, []);
+
+  const handleComponentsChange = React.useCallback(() => {
+    handleUnsave();
+  }, []);
+
+  const handleComponentSelect = React.useCallback(
+    (id: number | null) => {
+      // update the component first, then set the new component id
+      if (componentId === null) {
+        updatePipelineAttributes();
+      } else {
+        updateComponents();
+      }
+      setComponentId(id);
+    },
+    [componentId],
+  );
+
+  const handleComponentEnableToggle = React.useCallback(() => {
+    handleUnsave();
+  }, []);
+
+  const handleComponentNewClick = React.useCallback(
+    (component: ComponentInstance) => {
+      if (components === null) {
+        console.error('Component new without components');
+        return;
+      }
+
+      setComponents([...components, component]);
+      setComponentId(null);
+    },
+    [components],
+  );
+
+  const handleComponentDeleteClick = React.useCallback(
+    (id: number) => {
+      if (components === null) {
+        console.error('Component delete without components');
+        return;
+      }
+
+      const updatedComponents = components.filter((c) => c.id !== id);
+      const orderedComponents = updatedComponents.map((c, i) => ({
+        ...c,
+        order: i,
+      }));
+
+      setComponents(orderedComponents);
+
+      if (componentId === id) {
+        setComponentId(null);
+      }
+
+      handleUnsave();
+    },
+    [components],
+  );
+
+  // pipeline editor handlers
+
+  const handleComponentChange = React.useCallback(() => {
+    handleUnsave();
+  }, []);
+
+  const handlePipelineAttributesChange = React.useCallback(() => {
+    handleUnsave();
+  }, []);
+
+  // chat handlers
+
+  const handleChatSend = React.useCallback(() => {
+    if (!pipeline) {
+      console.error('Chat send without pipeline');
+      return;
+    }
+
+    console.log('chat send');
+  }, [pipeline]);
+
+  const handleChatReceive = React.useCallback(() => {
+    if (!pipelineId) {
+      return;
+    }
+
+    syncPipelineAttributes(pipelineId);
+    syncPipelineComponentInstance(pipelineId!);
+    console.log('chat receive');
+  }, [pipelineId]);
+
+  // effects
+
   React.useLayoutEffect(() => {
-    if (pipelineOpened) {
+    if (pipeline) {
       setEditorHeight(
         containerHeight -
           toolbarRef.current!.getBoundingClientRect().height -
@@ -318,21 +528,87 @@ function Pipeline() {
     } else {
       setEditorHeight(0);
     }
-  }, [pipelineOpened, containerHeight]);
+  }, [pipeline, containerHeight]);
 
-  const editorTitle = React.useMemo(() => {
-    if (mode === 'code') {
-      return 'Code';
-    }
+  // components
 
-    if (mode === 'attr') {
-      return 'Attributes';
-    }
+  const pipelinesPanel = React.useMemo(
+    () => (
+      <Panel
+        title="Pipeline"
+        titleSx={{ px: 3 }}
+        sx={{
+          width: pipeline ? undefined : 500,
+          height: pipeline ? editorHeight : 'fit-content',
+          px: 0,
+        }}
+        wrapper={<Box display="flex" flexDirection="column" maxHeight="100%" />}
+        trailing={
+          !pipeline ? (
+            <Tooltip title="New" placement="top">
+              <IconButton edge="end" onClick={handlePipelineNewClick}>
+                <AddCircleOutlineIcon />
+              </IconButton>
+            </Tooltip>
+          ) : undefined
+        }
+      >
+        {pipeline && components ? (
+          <InspectPipeline
+            ref={inspectPipelineRef}
+            pipeline={pipeline}
+            components={components}
+            component={component}
+            onPipelineChange={handlePipelineChange}
+            onComponentsChange={handleComponentsChange}
+            onComponentSelect={handleComponentSelect}
+            onComponentEnableToggle={handleComponentEnableToggle}
+            onComponentNew={handleComponentNewClick}
+            onComponentDelete={handleComponentDeleteClick}
+          />
+        ) : (
+          <PipelineList
+            pipelines={pipelines}
+            onPipelineSelect={handlePipelineSelect}
+            onPipelineRename={handlePipelineRename}
+            onPipelineDelete={handlePipelineDeleteClick}
+          />
+        )}
+      </Panel>
+    ),
+    [
+      pipeline,
+      components,
+      component,
+      pipelines,
+      handlePipelineNewClick,
+      handlePipelineSelect,
+      handlePipelineRename,
+      handlePipelineDeleteClick,
+      handlePipelineChange,
+      handleComponentsChange,
+      handleComponentSelect,
+      handleComponentEnableToggle,
+      handleComponentNewClick,
+      handleComponentDeleteClick,
+    ],
+  );
 
-    return 'Nothing is selected';
-  }, [mode]);
+  const toolbarComponent = React.useMemo(
+    () => (
+      <Panel paperRef={toolbarRef} sx={{ p: 1 }}>
+        <PipelineToolbar
+          pipeline={pipeline}
+          saveState={saveState}
+          onPipelineBack={handlePipelineBack}
+          onSave={handleSave}
+        />
+      </Panel>
+    ),
+    [pipeline, saveState, handlePipelineBack, handleSave],
+  );
 
-  const divider = React.useMemo(
+  const dividerComponent = React.useMemo(
     () => (
       <PanelResizeHandle>
         <Box
@@ -367,17 +643,10 @@ function Pipeline() {
         </Box>
       </PanelResizeHandle>
     ),
-    [theme],
+    [],
   );
 
-  const resizablePanelStyle = {
-    margin: -1,
-    padding: 1,
-    height: 'calc(100% + 16px)',
-    width: 'calc(100% + 16px)',
-  };
-
-  const editorComponents = React.useMemo(
+  const pipelineEditorComponent = React.useMemo(
     () => (
       <>
         <ResizablePanel
@@ -387,7 +656,9 @@ function Pipeline() {
           style={resizablePanelStyle}
         >
           <Panel
-            title={editorTitle}
+            title={
+              component ? 'Component Editor' : 'Pipeline Attributes Editor'
+            }
             titleSx={{ mx: 3 }}
             wrapper={
               <Box
@@ -400,13 +671,15 @@ function Pipeline() {
           >
             <PipelineEditor
               ref={pipelineEditorRef}
+              pipelineAttributes={pipelineAttributes}
+              markdown={markdown}
               component={component}
-              mode={mode}
-              onUnsave={handleUnsave}
+              onComponentChange={handleComponentChange}
+              onPipelineAttributesChange={handlePipelineAttributesChange}
             />
           </Panel>
         </ResizablePanel>
-        {divider}
+        {dividerComponent}
         <ResizablePanel
           id="chat"
           order={3}
@@ -416,135 +689,98 @@ function Pipeline() {
           <Panel
             title="Chat"
             sx={{ height: editorHeight }}
-            trailing={
-              pipeline?.is_safe && (
-                <>
-                  <Checkbox
-                    size="small"
-                    color="primary"
-                    value={runInBackend}
-                    onChange={handleSetRunInBackend}
-                  />
-                  <Typography>Run in backend</Typography>
-                </>
-              )
-            }
             wrapper={
               <Box display="flex" flexDirection="column" height="100%" />
+            }
+            trailing={
+              <Box display="flex" flexDirection="row" alignItems="center">
+                <Box height={1} overflow="visible">
+                  <Switch checked={markdown} onChange={handleMarkdownToggle} />
+                </Box>
+                <Typography>Markdown</Typography>
+              </Box>
             }
           >
             <Chat
               pipeline={pipeline!}
-              onPipelineRun={handlePipelineRun}
-              runInBackend={runInBackend}
+              markdown={markdown}
+              onChatSend={handleChatSend}
+              onChatReceive={handleChatReceive}
             />
           </Panel>
         </ResizablePanel>
       </>
     ),
     [
-      pipelineOpened,
-      pipeline,
-      components,
       component,
-      mode,
+      markdown,
+      pipeline,
+      pipelineAttributes,
       editorHeight,
-      runInBackend,
+      handleComponentChange,
+      handlePipelineAttributesChange,
+      handleMarkdownToggle,
+      handleChatSend,
+      handleChatReceive,
     ],
-  );
-
-  const pipelineListPanel = React.useMemo(
-    () => (
-      <Panel
-        title="Pipeline"
-        titleSx={{ px: 3 }}
-        sx={{
-          width: pipelineOpened ? undefined : 500,
-          height: pipelineOpened ? editorHeight : 'fit-content',
-          px: 0,
-        }}
-        wrapper={<Box display="flex" flexDirection="column" maxHeight="100%" />}
-        trailing={
-          !pipelineOpened ? (
-            <Tooltip title="New" placement="top">
-              <IconButton edge="end" onClick={handlePipelineNew}>
-                <AddCircleOutlineIcon />
-              </IconButton>
-            </Tooltip>
-          ) : undefined
-        }
-      >
-        {pipelineOpened && pipeline ? (
-          <InspectPipeline
-            ref={inspectPipelineRef}
-            pipeline={pipeline}
-            components={components}
-            setComponents={handleSetComponentsUnsave}
-            component={component}
-            setComponent={handleSetComponent}
-            setMode={setMode}
-            onUnsave={handleUnsave}
-          />
-        ) : (
-          <PipelineList setPipeline={setPipeline} />
-        )}
-      </Panel>
-    ),
-    [pipelineOpened, pipeline, components, component, mode, editorHeight],
   );
 
   return (
     <Box
       display="flex"
       flexDirection="column"
-      height={pipelineOpened ? containerHeight : undefined}
+      height={pipeline ? containerHeight : undefined}
       gap={1}
     >
-      {pipelineOpened && toolbar}
+      {pipeline && toolbarComponent}
       <Prompt
-        when={pipelineOpened && !saved}
+        when={pipeline !== null && saveState === 'unsaved'}
         message={unsaveMessage}
         beforeUnload
       />
-      {React.useMemo(
-        () =>
-          pipelineOpened && pipeline ? (
-            <PanelGroup
-              direction="horizontal"
-              autoSaveId="editor-panel-group"
-              style={{ overflow: 'visible' }}
-            >
-              <ResizablePanel
-                id="pipeline-list"
-                order={1}
-                collapsible
-                style={resizablePanelStyle}
-              >
-                {pipelineListPanel}
-              </ResizablePanel>
-              {divider}
-              {editorComponents}
-            </PanelGroup>
-          ) : (
+      {pipeline ? (
+        <PanelGroup
+          direction="horizontal"
+          autoSaveId="editor-panel-group"
+          style={{ overflow: 'visible' }}
+        >
+          <ResizablePanel
+            id="pipeline-list"
+            order={1}
+            collapsible
+            style={resizablePanelStyle}
+          >
+            {pipelinesPanel}
+          </ResizablePanel>
+          {dividerComponent}
+          {pipelineEditorComponent}
+        </PanelGroup>
+      ) : (
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          width="100%"
+          height="100%"
+        >
+          {pipelineNewClient.loading ? (
             <Box
               display="flex"
-              justifyContent="center"
+              flexDirection="column"
               alignItems="center"
-              width="100%"
-              height="100%"
+              gap={2}
+              maxWidth="500px"
             >
-              {pipelineListPanel}
+              <CircularProgress />
+              <Typography>
+                Please wait while we create a container for you...
+              </Typography>
+              <Typography>This may take up to 20 seconds.</Typography>
             </Box>
-          ),
-        [
-          pipelineOpened,
-          pipeline,
-          components,
-          component,
-          mode,
-          editorHeight,
-          runInBackend,
-        ],
+          ) : (
+            pipelinesPanel
+          )}
+        </Box>
       )}
     </Box>
   );

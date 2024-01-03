@@ -78,10 +78,13 @@ function NavBar({ children }: NavBarProps) {
   const navigate = useNavigate();
   const [, , removeCookie] = useCookies();
   const theme = useTheme();
+
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
-  const [isAdmin, setIsAdmin] = React.useState<boolean>(false);
+
+  // is admin
 
   const isAdminClient = useComposerAxios<IsAdmin>(getIsAdmin());
+  const [isAdmin, setIsAdmin] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     isAdminClient.sendRequest();
@@ -92,6 +95,8 @@ function NavBar({ children }: NavBarProps) {
 
     setIsAdmin(isAdminClient.response.data.is_admin);
   }, [isAdminClient.response]);
+
+  // handlers
 
   const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -111,6 +116,8 @@ function NavBar({ children }: NavBarProps) {
     removeCookie('refresh-token');
     navigate('/login/');
   };
+
+  // builders
 
   const buildPageButton = ({
     icon,

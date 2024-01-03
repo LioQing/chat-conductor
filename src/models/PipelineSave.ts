@@ -1,20 +1,25 @@
 import { ComposerAxiosRequest } from '../hooks/useComposerAxios';
+import { ArgumentObject } from '../utils/Argument';
 import { JsonObject } from '../utils/JsonObject';
 
 export interface PipelineSaveComponentInstance {
   id: number;
   is_enabled: boolean;
   order: number;
-  name: string;
   function_name: string;
-  description: JsonObject;
+  name: string;
+  arguments: ArgumentObject;
+  return_type: string;
+  description: string;
   code: string;
   state: JsonObject;
 }
 
 export interface PipelineSaveRequest {
   name: string;
+  response: string;
   state: JsonObject;
+  description: string;
   components: PipelineSaveComponentInstance[];
 }
 
