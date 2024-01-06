@@ -20,6 +20,7 @@ import {
   AdminMakeTemplateRequest,
   patchAdminMakeTemplate,
 } from '../models/AdminMakeTemplate';
+import { AdminTokenUsage, getAdminTokenUsage } from '../models/AdminTokenUsage';
 
 function Admin() {
   const [usernameError, setUsernameError] = React.useState<string | null>(null);
@@ -38,6 +39,7 @@ function Admin() {
   const [templateComponentId, setTemplateComponentId] = React.useState<
     number | null
   >(null);
+  const [tokenUsages, setTokenUsages] = React.useState<AdminTokenUsage[]>([]);
 
   const createUserClient = useComposerAxios<
     AdminCreateUser,
@@ -51,6 +53,7 @@ function Admin() {
     AdminMakeTemplate,
     AdminMakeTemplateRequest
   >();
+  const getTokenUsageClient = useComposerAxios<AdminTokenUsage[]>();
 
   const handleCreateUserSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -90,6 +93,20 @@ function Admin() {
       } as AdminCreateUserRequest),
     );
   };
+
+  React.useEffect(() => {
+    getTokenUsageClient.sendRequest(getAdminTokenUsage());
+  }, []);
+
+  React.useEffect(() => {
+    if (!getTokenUsageClient.response) {
+      return;
+    }
+
+    if (getTokenUsageClient.response.status === 200) {
+      setTokenUsages(getTokenUsageClient.response.data);
+    }
+  }, [getTokenUsageClient.response]);
 
   React.useEffect(() => {
     if (!createUserClient.response) {
@@ -352,6 +369,39 @@ function Admin() {
             </Typography>
           </Box>
         )}
+      </Panel>
+      <Panel title="User Token Usages">
+        <Box display="flex" flexDirection="column" gap={1}>
+          <Box display="flex" flexDirection="row" gap={1}>
+            <Typography variant="body1" flex={3}>
+              Username
+            </Typography>
+            <Typography variant="body1" flex={1}>
+              OAI
+            </Typography>
+            <Typography variant="body1" flex={1}>
+              VAI
+            </Typography>
+          </Box>
+          {tokenUsages.map((tokenUsage) => (
+            <Box
+              key={tokenUsage.username}
+              display="flex"
+              flexDirection="row"
+              gap={1}
+            >
+              <Typography variant="body1" flex={3}>
+                {tokenUsage.username}
+              </Typography>
+              <Typography variant="body1" flex={1}>
+                {tokenUsage.usage.oai}
+              </Typography>
+              <Typography variant="body1" flex={1}>
+                {tokenUsage.usage.vai}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
       </Panel>
     </Box>
   );
