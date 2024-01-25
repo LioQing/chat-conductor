@@ -1,6 +1,24 @@
 # Chat Conductor
 
-Chat conductor project.
+Chat conductor project. This is a project aimed at providing a quick generative AI pipeline prototyping.
+
+The backend of this project is [Chat Composer](https://github.com/LioQing/chat-composer/).
+
+## Demo Video
+
+https://github.com/LioQing/chat-conductor/assets/46854695/97632909-88c6-4e0f-9366-613e7d7bd528
+
+## Current Features
+
+User feature:
+- Create containerized pipeline project
+- Call supported generative AI services (currently support Azure OpenAI Chat Completion, Google Vertex AI Gemini Pro)
+- Download project files
+- Integrate Chat Conductor API into your own project
+
+Admin feature:
+- Create and whitelist user
+- Monitor user token usage on supported generative AI services
 
 ## Environment Setup
 
